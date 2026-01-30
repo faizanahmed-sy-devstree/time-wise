@@ -23,6 +23,9 @@ import {
   Github,
   Linkedin,
   RefreshCcw,
+  CheckCircle,
+  Settings,
+  Info,
   type LucideProps,
 } from 'lucide-react';
 
@@ -50,4 +53,7 @@ export const Icons = {
   Github,
   Linkedin,
   RefreshCcw,
+  CheckCircle,
+  Settings,
+  Info,
 };

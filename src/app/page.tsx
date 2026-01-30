@@ -1,42 +1,41 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { getAiSchedule, getEodReport } from "./actions";
-import type {
-  DailySchedule as AiDailySchedule,
-  DailyScheduleBlock as AiScheduleBlock,
-} from "@/ai/flows/planner-flow";
-import type { EodReport } from "@/ai/flows/eod-report-flow";
 import {
-  format,
-  addMinutes,
-  isValid,
   differenceInHours,
   subDays,
   set,
+  isValid,
+  format,
+  differenceInMinutes,
+  differenceInMilliseconds,
 } from "date-fns";
+
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { AiAssistantCard } from "@/components/features/ai-assistant-card";
-import { ScheduleCard } from "@/components/features/schedule-card";
 import { TimeTrackerCards } from "@/components/features/time-tracker-cards";
-import { ReportsCard } from "@/components/features/reports-card";
 import { WelcomeDialog } from "@/components/features/welcome-dialog";
-import { SettingsSheet } from "@/components/features/settings-sheet";
-import { Icons } from "@/components/ui/icons";
-import { Button } from "@/components/ui/button";
+import { AboutSheet } from "@/components/features/about-sheet";
 
 const APP_SETTINGS_KEY = "timewiseSettings";
 const APP_SESSION_KEY = "timewiseSession";
 
-export type ScheduleBlock = {
-  id: string;
-  type: "work" | "break" | "meeting";
-  task: string;
-  duration: number;
-  completed: boolean;
+export type LogEntry = {
+  type: "punch-in" | "break-start" | "break-end" | "reset";
+  timestamp: string;
+  message: string;
 };
+
+interface SessionState {
+  sessionDate: string;
+  startTime: string;
+  totalBreakMinutes: number; // Kept for backward compatibility/reference if needed, but primary is Ms now
+  totalBreakMs: number;
+  isOnBreak: boolean;
+  breakStartTime: string | null;
+  logs: LogEntry[];
+}
 
 export default function Home() {
   const { toast } = useToast();
@@ -45,26 +44,17 @@ export default function Home() {
   const [settings, setSettings] = useLocalStorage(APP_SETTINGS_KEY, {
     fullDayHours: "8",
     fullDayMinutes: "0",
-    apiKey: "",
+    apiKey: "", 
   });
 
-  const [sessionState, setSessionState] = useLocalStorage(APP_SESSION_KEY, {
+  const [sessionState, setSessionState] = useLocalStorage<SessionState>(APP_SESSION_KEY, {
     sessionDate: "",
     startTime: "",
     totalBreakMinutes: 0,
-    schedule: { schedule: [] } as { schedule: ScheduleBlock[] },
-  });
-
-  const [aiState, setAiState] = useState<{
-    tasks: string;
-    eodReport: EodReport | null;
-    error: string | null;
-    loading: "schedule" | "eod" | false;
-  }>({
-    tasks: "",
-    eodReport: null,
-    error: null,
-    loading: false,
+    totalBreakMs: 0,
+    isOnBreak: false,
+    breakStartTime: null,
+    logs: [],
   });
 
   const [activeDuration, setActiveDuration] = useState({
@@ -80,18 +70,38 @@ export default function Home() {
     setIsClient(true);
 
     const todayStr = format(new Date(), "yyyy-MM-dd");
+    
+    // Migration: ensure logs exists
+    let newState = { ...sessionState };
+    let hasChanges = false;
+
+    if (!newState.logs) {
+        newState.logs = [];
+        hasChanges = true;
+    }
+    
+    // Migration: ensure totalBreakMs exists
+    if (newState.totalBreakMs === undefined) {
+        newState.totalBreakMs = (newState.totalBreakMinutes || 0) * 60 * 1000;
+        hasChanges = true;
+    }
+
+    if (hasChanges) {
+        setSessionState(newState);
+    }
+    
     if (sessionState.sessionDate !== todayStr) {
-      startNewSession();
+      if (!sessionState.startTime) {
+          startNewSession(); // Initialize
+      }
     }
+  }, []); // Run once on mount
 
-    if (!settings.apiKey) {
-      setIsWelcomeDialogOpen(true);
-    }
-
+  useEffect(() => {
     const fullHours = parseInt(settings.fullDayHours, 10) || 0;
     const fullMinutes = parseInt(settings.fullDayMinutes, 10) || 0;
     setActiveDuration({ hours: fullHours, minutes: fullMinutes, mode: "full" });
-  }, [settings.apiKey, settings.fullDayHours, settings.fullDayMinutes]);
+  }, [settings.fullDayHours, settings.fullDayMinutes]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -100,23 +110,31 @@ export default function Home() {
 
       if (
         sessionState.startTime &&
-        differenceInHours(now, new Date(sessionState.startTime)) >= 24
+        differenceInHours(now, new Date(sessionState.startTime)) >= 12
       ) {
         startNewSession();
       }
-    }, 1000);
+    }, 1000); // Update every second to allow real-time timer
     return () => clearInterval(interval);
   }, [sessionState.startTime]);
 
   const startNewSession = (startTime = new Date()) => {
     const todayStr = format(startTime, "yyyy-MM-dd");
+    const newLog: LogEntry = {
+        type: "punch-in",
+        timestamp: startTime.toISOString(),
+        message: "Punched In",
+    };
+
     setSessionState({
       sessionDate: todayStr,
       startTime: startTime.toISOString(),
       totalBreakMinutes: 0,
-      schedule: { schedule: [] },
+      totalBreakMs: 0,
+      isOnBreak: false,
+      breakStartTime: null,
+      logs: [newLog],
     });
-    setAiState((prev) => ({ ...prev, eodReport: null }));
   };
 
   const handleSaveSettings = () => {
@@ -142,20 +160,11 @@ export default function Home() {
       });
     }
 
-    if (settings.apiKey) {
-      toast({
-        title: "Settings Saved",
-        description: "Your new settings have been saved.",
-      });
-      return true;
-    } else {
-      toast({
-        variant: "destructive",
-        title: "API Key Required",
-        description: "Please enter your Gemini API key to continue.",
-      });
-      return false;
-    }
+    toast({
+      title: "Settings Saved",
+      description: "Your new settings have been saved.",
+    });
+    return true;
   };
 
   const {
@@ -166,6 +175,7 @@ export default function Home() {
     progress,
     isWorkDayOver,
     isValid: isDurationValid,
+    currentTotalBreakMs,
   } = useMemo(() => {
     if (!isClient || !sessionState.startTime)
       return {
@@ -176,6 +186,7 @@ export default function Home() {
         progress: 0,
         isWorkDayOver: false,
         isValid: false,
+        currentTotalBreakMs: 0,
       };
 
     const workingHours = activeDuration.hours;
@@ -190,6 +201,7 @@ export default function Home() {
         progress: 0,
         isWorkDayOver: false,
         isValid: false,
+        currentTotalBreakMs: 0,
       };
     }
 
@@ -203,10 +215,18 @@ export default function Home() {
         progress: 0,
         isWorkDayOver: false,
         isValid: false,
+         currentTotalBreakMs: 0,
       };
     }
     const workingMs = (workingHours * 60 + workingMinutes) * 60 * 1000;
-    const totalBreakTimeMs = sessionState.totalBreakMinutes * 60 * 1000;
+    
+    // Calculate current break duration if active
+    let additionalBreakMs = 0;
+    if (sessionState.isOnBreak && sessionState.breakStartTime) {
+        additionalBreakMs = Math.max(0, currentTime.getTime() - new Date(sessionState.breakStartTime).getTime());
+    }
+
+    const totalBreakTimeMs = (sessionState.totalBreakMs || 0) + additionalBreakMs;
 
     const completionTimeDate = new Date(
       arrivalTimeDate.getTime() + workingMs + totalBreakTimeMs
@@ -214,6 +234,7 @@ export default function Home() {
     const timeRemainingMs =
       completionTimeDate.getTime() - currentTime.getTime();
 
+    // Work done = Time elapsed since arrival - Total Break Time
     const elapsedMsSinceArrival = Math.max(
       0,
       currentTime.getTime() - arrivalTimeDate.getTime()
@@ -234,225 +255,17 @@ export default function Home() {
       progress: progressValue,
       isWorkDayOver: timeRemainingMs <= 0,
       isValid: workingMs > 0,
+      currentTotalBreakMs: totalBreakTimeMs,
     };
   }, [
     activeDuration,
     currentTime,
     isClient,
     sessionState.startTime,
-    sessionState.totalBreakMinutes,
+    sessionState.totalBreakMs,
+    sessionState.isOnBreak,
+    sessionState.breakStartTime
   ]);
-
-  const recalculateSchedule = useCallback(
-    (
-      scheduleItems: Omit<ScheduleBlock, "id" | "completed">[]
-    ): ScheduleBlock[] => {
-      if (!scheduleItems || scheduleItems.length === 0) {
-        return [];
-      }
-
-      return scheduleItems.map((block) => ({
-        ...block,
-        id: `local-${Date.now()}-${Math.random()}`,
-        completed: false,
-      }));
-    },
-    []
-  );
-
-  const handleGenerateSchedule = async () => {
-    setAiState((prev) => ({
-      ...prev,
-      loading: "schedule",
-      error: null,
-      eodReport: null,
-    }));
-    setSessionState((prev) => ({ ...prev, schedule: { schedule: [] } }));
-
-    const result = await getAiSchedule({
-      tasks: aiState.tasks,
-      apiKey: settings.apiKey,
-      workDuration: {
-        hours: activeDuration.hours,
-        minutes: activeDuration.minutes,
-      },
-      startTime: sessionState.startTime,
-    });
-
-    if (result.error) {
-      setAiState((prev) => ({ ...prev, loading: false, error: result.error }));
-      toast({
-        variant: "destructive",
-        title: "AI Error",
-        description: result.error,
-        duration: 10000,
-      });
-    } else if (result.schedule) {
-      const scheduleWithIdsAndCompletion = recalculateSchedule(
-        result.schedule.schedule as AiScheduleBlock[]
-      );
-      setSessionState((prev) => ({
-        ...prev,
-        schedule: { schedule: scheduleWithIdsAndCompletion },
-        totalBreakMinutes: 0,
-      }));
-      setAiState((prev) => ({ ...prev, loading: false, eodReport: null }));
-    }
-  };
-
-  const handleGenerateEodReport = async () => {
-    if (
-      !sessionState.schedule ||
-      !Array.isArray(sessionState.schedule.schedule)
-    ) {
-      toast({
-        variant: "destructive",
-        title: "No Schedule",
-        description: "There is no schedule to generate a report from.",
-      });
-      return;
-    }
-    const completedTasks = sessionState.schedule.schedule
-      .filter(
-        (block) =>
-          block.completed && (block.type === "work" || block.type === "meeting")
-      )
-      .map((block) => `- ${block.task}`)
-      .join("\n");
-
-    if (!completedTasks) {
-      toast({
-        variant: "destructive",
-        title: "No Completed Tasks",
-        description:
-          "Please complete some tasks in your schedule to generate a report.",
-      });
-      return;
-    }
-
-    setAiState((prev) => ({ ...prev, loading: "eod", error: null }));
-
-    const result = await getEodReport({
-      tasks: completedTasks,
-      apiKey: settings.apiKey,
-    });
-
-    if (result.error) {
-      setAiState((prev) => ({ ...prev, loading: false, error: result.error }));
-      toast({
-        variant: "destructive",
-        title: "AI Error",
-        description: result.error,
-        duration: 10000,
-      });
-    } else if (result.report) {
-      setAiState((prev) => ({
-        ...prev,
-        loading: false,
-        eodReport: result.report,
-      }));
-    }
-  };
-
-  const hasCompletedTasks = useMemo(() => {
-    if (
-      !sessionState.schedule ||
-      !Array.isArray(sessionState.schedule.schedule)
-    ) {
-      return false;
-    }
-    return sessionState.schedule.schedule.some(
-      (block) =>
-        block.completed && (block.type === "work" || block.type === "meeting")
-    );
-  }, [sessionState.schedule]);
-
-  const taskListSummary = useMemo(() => {
-    if (
-      !sessionState.schedule ||
-      !Array.isArray(sessionState.schedule.schedule)
-    ) {
-      return "Your task list is empty.";
-    }
-    const list = sessionState.schedule.schedule
-      .filter((block) => block.type === "work" || block.type === "meeting")
-      .map((block) => `- ${block.task}`)
-      .join("\n");
-    return list || "No tasks or meetings in your schedule yet.";
-  }, [sessionState.schedule]);
-
-  const handleCopyTaskList = () => {
-    if (
-      !taskListSummary ||
-      taskListSummary === "No tasks or meetings in your schedule yet." ||
-      taskListSummary === "Your task list is empty."
-    )
-      return;
-    navigator.clipboard.writeText(taskListSummary);
-    toast({
-      title: "Copied to Clipboard",
-      description: "Your task list has been copied.",
-    });
-  };
-
-  const handleToggleTaskCompletion = (index: number) => {
-    if (!sessionState.schedule) return;
-
-    const newScheduleItems = [...sessionState.schedule.schedule];
-    const block = newScheduleItems[index];
-    const newCompletedState = !block.completed;
-    newScheduleItems[index] = { ...block, completed: newCompletedState };
-
-    if (block.type === "break") {
-      const breakDuration = block.duration;
-      setSessionState((prev) => ({
-        ...prev,
-        totalBreakMinutes: newCompletedState
-          ? prev.totalBreakMinutes + breakDuration
-          : prev.totalBreakMinutes - breakDuration,
-      }));
-
-      toast({
-        title: `Break Time ${newCompletedState ? "Added" : "Removed"}`,
-        description: `${breakDuration} minutes have been ${
-          newCompletedState ? "added to" : "removed from"
-        } your total break time.`,
-      });
-    }
-
-    setSessionState((prev) => ({
-      ...prev,
-      schedule: { schedule: newScheduleItems },
-    }));
-  };
-
-  const handleEodReportChange = (value: string) => {
-    if (!aiState.eodReport) return;
-    const newReport = { ...aiState.eodReport, summary: value };
-    setAiState((prev) => ({ ...prev, eodReport: newReport }));
-  };
-
-  const handleCopySummary = () => {
-    if (!aiState.eodReport?.summary) return;
-    navigator.clipboard.writeText(aiState.eodReport.summary);
-    toast({
-      title: "Copied to Clipboard",
-      description: "The EOD summary has been copied.",
-    });
-  };
-
-  const handleDragEnd = (result: any) => {
-    if (!sessionState.schedule || !result.destination) return;
-
-    const items = Array.from(sessionState.schedule.schedule);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
-
-    setSessionState((prev) => ({
-      ...prev,
-      schedule: { schedule: items },
-    }));
-  };
 
   const setWorkDuration = (mode: "full" | "half") => {
     const fullHours = parseInt(settings.fullDayHours, 10) || 0;
@@ -485,27 +298,6 @@ export default function Home() {
     }
   };
 
-  const fullSchedule = useMemo(() => {
-    if (
-      !sessionState.schedule ||
-      !Array.isArray(sessionState.schedule.schedule) ||
-      !arrivalTime
-    )
-      return [];
-
-    let lastEndTime: Date = arrivalTime;
-    return sessionState.schedule.schedule.map((block) => {
-      const startTime = new Date(lastEndTime);
-      const endTime = addMinutes(startTime, block.duration);
-      lastEndTime = endTime;
-      return {
-        ...block,
-        startTime,
-        endTime,
-      };
-    });
-  }, [sessionState.schedule, arrivalTime]);
-
   const handleStartTimeChange = (newTime: string) => {
     const [hours, minutes] = newTime.split(":").map(Number);
     const now = new Date();
@@ -519,10 +311,57 @@ export default function Home() {
     if (potentialStartTime > now) {
       potentialStartTime = subDays(potentialStartTime, 1);
     }
+    
     setSessionState((prev) => ({
       ...prev,
       startTime: potentialStartTime.toISOString(),
+       logs: prev.logs && prev.logs.length > 0
+           ? prev.logs.map((log, index) => 
+               index === 0 && log.type === "punch-in" 
+               ? { ...log, timestamp: potentialStartTime.toISOString() } 
+               : log
+           )
+           : [{ type: "punch-in", timestamp: potentialStartTime.toISOString(), message: "Punched In" }]
     }));
+  };
+
+  const handleToggleBreak = () => {
+      const now = new Date();
+      if (sessionState.isOnBreak) {
+          // End Break
+          const breakStart = new Date(sessionState.breakStartTime!);
+          const durationMs = Math.max(0, differenceInMilliseconds(now, breakStart));
+          const durationMinutes = Math.floor(durationMs / 1000 / 60);
+          
+          const newLog: LogEntry = {
+              type: "break-end",
+              timestamp: now.toISOString(),
+              message: `Break Ended (${durationMinutes}m)`,
+          };
+
+          setSessionState(prev => ({
+              ...prev,
+              isOnBreak: false,
+              breakStartTime: null,
+              totalBreakMinutes: prev.totalBreakMinutes + durationMinutes,
+              totalBreakMs: (prev.totalBreakMs || 0) + durationMs,
+              logs: [...(prev.logs || []), newLog]
+          }));
+      } else {
+          // Start Break
+          const newLog: LogEntry = {
+              type: "break-start",
+              timestamp: now.toISOString(),
+              message: "Break Started",
+          };
+
+          setSessionState(prev => ({
+              ...prev,
+              isOnBreak: true,
+              breakStartTime: now.toISOString(),
+              logs: [...(prev.logs || []), newLog]
+          }));
+      }
   };
 
   if (!isClient) {
@@ -530,84 +369,63 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen p-4 sm:p-6 bg-background overflow-y-auto">
+    <div className="flex flex-col h-screen overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-background via-secondary/20 to-background">
       <WelcomeDialog
         open={isWelcomeDialogOpen}
         onOpenChange={setIsWelcomeDialogOpen}
-        settings={settings}
-        onSettingsChange={setSettings}
-        onSave={handleSaveSettings}
       />
 
-      <header className="w-full max-w-7xl flex justify-between items-center mb-4 flex-shrink-0 mx-auto">
+      <header className="w-full max-w-7xl flex justify-between items-center mb-4 mx-auto flex-none">
         <h1 className="text-3xl sm:text-4xl font-bold font-headline text-primary">
           TimeWise
         </h1>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <SettingsSheet
-            settings={settings}
-            onSettingsChange={setSettings}
-            onSave={handleSaveSettings}
-          />
+          <AboutSheet />
         </div>
       </header>
 
-      <main className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 flex-grow">
-        <div className="flex flex-col gap-6">
-          <AiAssistantCard
-            tasks={aiState.tasks}
-            onTasksChange={(value) =>
-              setAiState((prev) => ({ ...prev, tasks: value }))
-            }
-            onGenerate={handleGenerateSchedule}
-            isLoading={aiState.loading === "schedule"}
-            isValid={isDurationValid}
-          />
-          <ScheduleCard
-            schedule={sessionState.schedule.schedule}
-            setSchedule={(newSchedule) =>
-              setSessionState((prev) => ({
-                ...prev,
-                schedule: { schedule: newSchedule },
-              }))
-            }
-            fullSchedule={fullSchedule}
-            completionTime={completionTime}
-            onToggleCompletion={handleToggleTaskCompletion}
-          />
-        </div>
-
-        <div className="grid grid-rows-[auto_1fr] gap-6">
-          <TimeTrackerCards
-            isWorkDayOver={isWorkDayOver}
-            isValid={isDurationValid}
-            completionTime={completionTime}
-            currentTime={currentTime}
-            overtime={overtime}
-            timeRemaining={timeRemaining}
-            progress={progress}
-            activeDurationMode={activeDuration.mode}
-            onSetWorkDuration={setWorkDuration}
-            arrivalTime={arrivalTime}
-            onStartTimeChange={handleStartTimeChange}
-            totalBreakMinutes={sessionState.totalBreakMinutes}
-          />
-
-          <ReportsCard
-            taskListSummary={taskListSummary}
-            onCopyTaskList={handleCopyTaskList}
-            eodReport={aiState.eodReport}
-            onEodReportChange={handleEodReportChange}
-            onGenerateEodReport={handleGenerateEodReport}
-            onCopySummary={handleCopySummary}
-            isLoading={aiState.loading === "eod"}
-            hasCompletedTasks={hasCompletedTasks}
-          />
-        </div>
+      <main className="w-full max-w-4xl mx-auto flex flex-col gap-6 flex-1 min-h-0">
+        <TimeTrackerCards
+          isWorkDayOver={isWorkDayOver}
+          isValid={isDurationValid}
+          completionTime={completionTime}
+          currentTime={currentTime}
+          overtime={overtime}
+          timeRemaining={timeRemaining}
+          progress={progress}
+          activeDurationMode={activeDuration.mode}
+          onSetWorkDuration={setWorkDuration}
+          arrivalTime={arrivalTime}
+          onStartTimeChange={handleStartTimeChange}
+          totalBreakMs={currentTotalBreakMs}
+          isOnBreak={sessionState.isOnBreak}
+          onToggleBreak={handleToggleBreak}
+          logs={sessionState.logs || []}
+          fullDayHours={settings.fullDayHours}
+          fullDayMinutes={settings.fullDayMinutes}
+          onDurationSettingsChange={(hours, minutes) => {
+              setSettings(prev => ({ ...prev, fullDayHours: hours, fullDayMinutes: minutes }));
+              // Logic to update active duration immediately if in Full mode
+              // This mimics the effect inside `handleSaveSettings` but for specific values
+              const h = parseInt(hours, 10) || 0;
+              const m = parseInt(minutes, 10) || 0;
+              if (activeDuration.mode === "full") {
+                  setActiveDuration(prev => ({ ...prev, hours: h, minutes: m }));
+              } else {
+                   const totalMinutes = (h * 60 + m) / 2;
+                    setActiveDuration(prev => ({
+                        ...prev,
+                        hours: Math.floor(totalMinutes / 60),
+                        minutes: totalMinutes % 60,
+                    }));
+              }
+              toast({ title: "Updated", description: "Work duration settings updated." });
+          }}
+        />
       </main>
 
-      <footer className="w-full max-w-7xl mx-auto text-center pt-4 flex-shrink-0">
+      <footer className="w-full max-w-7xl mx-auto text-center pt-4 pb-2 flex-none">
         <p className="text-sm text-muted-foreground px-4 sm:px-6">
           Built by{" "}
           <a
@@ -618,7 +436,7 @@ export default function Home() {
           >
             Mitul Parmar
           </a>{" "}
-          and an AI that doesn't understand CSS but keeps trying. (
+          (
           <a
             href="https://github.com/mitulparmar7161/time-wise.git"
             target="_blank"

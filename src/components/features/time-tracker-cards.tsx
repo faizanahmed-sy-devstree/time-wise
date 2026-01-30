@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icons } from "@/components/ui/icons";
 import { format } from "date-fns";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { LogEntry } from "@/app/page";
 
 interface TimeTrackerCardsProps {
   isWorkDayOver: boolean;
@@ -27,7 +29,13 @@ interface TimeTrackerCardsProps {
   onSetWorkDuration: (mode: "full" | "half") => void;
   arrivalTime: Date | null;
   onStartTimeChange: (newTime: string) => void;
-  totalBreakMinutes: number;
+  totalBreakMs: number;
+  isOnBreak: boolean;
+  onToggleBreak: () => void;
+  logs: LogEntry[];
+  fullDayHours: string;
+  fullDayMinutes: string;
+  onDurationSettingsChange: (hours: string, minutes: string) => void;
 }
 
 export function TimeTrackerCards({
@@ -42,9 +50,18 @@ export function TimeTrackerCards({
   onSetWorkDuration,
   arrivalTime,
   onStartTimeChange,
-  totalBreakMinutes,
+  totalBreakMs,
+  isOnBreak,
+  onToggleBreak,
+  logs,
+  fullDayHours,
+  fullDayMinutes,
+  onDurationSettingsChange,
 }: TimeTrackerCardsProps) {
   const [isEditingStartTime, setIsEditingStartTime] = useState(false);
+  const [isEditingDuration, setIsEditingDuration] = useState(false);
+  const [tempHours, setTempHours] = useState(fullDayHours);
+  const [tempMinutes, setTempMinutes] = useState(fullDayMinutes);
 
   const formatTime = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -65,125 +82,237 @@ export function TimeTrackerCards({
     onStartTimeChange(e.target.value);
   };
 
+  const handleSaveDuration = () => {
+      onDurationSettingsChange(tempHours, tempMinutes);
+      setIsEditingDuration(false);
+  }
+
+  const startEditingDuration = () => {
+      setTempHours(fullDayHours);
+      setTempMinutes(fullDayMinutes);
+      setIsEditingDuration(true);
+  }
+
   return (
-    <>
-      <Card className="text-center shadow-lg">
-        <CardHeader>
-          <CardTitle className="font-headline text-2xl text-primary">
+    <div className="flex flex-col gap-6 h-full font-sans">
+      <Card 
+        className={`text-center shadow-lg flex-none transition-all duration-300 hover:shadow-xl ${
+            isWorkDayOver ? "border-orange-500/50 shadow-orange-500/10" : "border-primary/20 shadow-primary/5"
+        }`}
+      >
+        <CardHeader className="pb-2">
+          <CardTitle className="font-headline text-2xl text-primary tracking-tight">
             {isWorkDayOver ? "Overtime" : "Time Remaining"}
           </CardTitle>
           {isValid && completionTime && (
-            <CardDescription>
+            <CardDescription className="font-medium">
               {isWorkDayOver ? "Workday ended at" : "Ends around"}{" "}
-              {format(completionTime, "hh:mm a")}
+              <span className="text-foreground font-mono font-medium">{format(completionTime, "hh:mm a")}</span>
               <span className="text-muted-foreground/80">
                 {" / Current: "}
-                {format(currentTime, "hh:mm a")}
+                <span className="font-mono">{format(currentTime, "hh:mm a")}</span>
               </span>
             </CardDescription>
           )}
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6 pb-6">
           <div
-            className={`font-headline font-bold text-5xl sm:text-6xl ${
-              isWorkDayOver ? "text-orange-500" : "text-foreground"
+            className={`font-mono tabular-nums tracking-tighter font-bold text-5xl sm:text-6xl ${
+              isWorkDayOver 
+                ? "text-orange-600 drop-shadow-sm" 
+                : "text-foreground"
             }`}
           >
             {isValid
               ? formatTime(isWorkDayOver ? overtime : timeRemaining)
               : "00:00:00"}
           </div>
-          <Progress value={isValid ? progress : 0} className="w-full" />
+          <Progress 
+            value={isValid ? progress : 0} 
+            className={`h-3 w-full ${isWorkDayOver ? "bg-orange-100 dark:bg-orange-950/30" : ""}`}
+          />
           {!isValid && (
-            <p className="text-sm text-destructive">
+            <p className="text-sm text-destructive font-medium animate-pulse">
               Please set a valid work duration in settings.
             </p>
           )}
-          <div className="flex items-center justify-center gap-2 pt-2">
-            <Button
-              variant={activeDurationMode === "full" ? "default" : "outline"}
-              size="sm"
-              className="w-full max-w-xs"
-              onClick={() => onSetWorkDuration("full")}
-            >
-              Full Day
-            </Button>
-            <Button
-              variant={activeDurationMode === "half" ? "default" : "outline"}
-              size="sm"
-              className="w-full max-w-xs"
-              onClick={() => onSetWorkDuration("half")}
-            >
-              Half Day
-            </Button>
-          </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="shadow-lg h-full flex flex-col">
-          <CardHeader>
-            <CardTitle className="font-headline text-xl flex items-center justify-between">
-              <span>Session Info</span>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-none">
+        <Card className="shadow-lg flex flex-col hover:shadow-xl transition-all duration-300 border-green-500/20 bg-gradient-to-br from-card to-green-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="font-headline text-lg flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                  <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                  Session Info
+              </span>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                onClick={startEditingDuration}
+              >
+                  <Icons.Settings className="h-4 w-4" />
+              </Button>
             </CardTitle>
-            <CardDescription>Your work session details.</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col flex-grow justify-center items-center space-y-4">
-            <div className="text-center">
-              {isEditingStartTime ? (
-                <div className="flex items-center gap-2 mt-1">
-                  <Input
-                    type="time"
-                    value={arrivalTime ? format(arrivalTime, "HH:mm") : ""}
-                    onChange={handleTimeInputChange}
-                    className="w-auto"
-                  />
-                  <Button onClick={handleSaveStartTime} size="sm">
-                    Save
-                  </Button>
+          <CardContent className="flex flex-col flex-grow justify-center items-center space-y-6 py-4">
+            {/* Work Duration Settings Overlay/Section */}
+            {isEditingDuration ? (
+                <div className="w-full bg-muted/30 p-4 rounded-lg border border-muted animate-in fade-in zoom-in-95 space-y-3">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Set Full Workday</Label>
+                    <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                            <Input 
+                                value={tempHours}
+                                onChange={(e) => setTempHours(e.target.value)}
+                                className="h-9 font-mono text-center"
+                                placeholder="Hrs"
+                            />
+                            <span className="text-[10px] text-muted-foreground text-center block mt-1">Hours</span>
+                        </div>
+                        <span className="font-bold">:</span>
+                        <div className="flex-1">
+                            <Input 
+                                value={tempMinutes}
+                                onChange={(e) => setTempMinutes(e.target.value)}
+                                className="h-9 font-mono text-center"
+                                placeholder="Min"
+                            />
+                            <span className="text-[10px] text-muted-foreground text-center block mt-1">Mins</span>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                        <Button size="sm" variant="outline" className="flex-1 h-8" onClick={() => setIsEditingDuration(false)}>Cancel</Button>
+                        <Button size="sm" className="flex-1 h-8" onClick={handleSaveDuration}>Save</Button>
+                    </div>
                 </div>
-              ) : (
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-2xl font-bold font-mono">
-                    {arrivalTime
-                      ? arrivalTime.toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          hour12: true,
-                        })
-                      : "..."}
-                  </p>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => setIsEditingStartTime(true)}
-                  >
-                    <Icons.Pencil className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-              <Label className="text-muted-foreground">Punched In At</Label>
-            </div>
+            ) : (
+                <>
+                    <div className="text-center group relative cursor-pointer" onClick={() => !isEditingStartTime && setIsEditingStartTime(true)}>
+                    <Label className="text-muted-foreground text-xs uppercase tracking-widest font-semibold mb-1 block">Punched In At</Label>
+                    {isEditingStartTime ? (
+                        <div className="flex items-center gap-2 animate-in fade-in zoom-in-95">
+                        <Input
+                            type="time"
+                            value={arrivalTime ? format(arrivalTime, "HH:mm") : ""}
+                            onChange={handleTimeInputChange}
+                            className="w-auto font-mono text-lg"
+                            autoFocus
+                            onBlur={handleSaveStartTime}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveStartTime()}
+                        />
+                        <Button onClick={handleSaveStartTime} size="sm" className="h-10">
+                            Save
+                        </Button>
+                        </div>
+                    ) : (
+                        <div className="flex items-center justify-center gap-3 transition-opacity hover:opacity-80">
+                        <p className="text-4xl font-mono tabular-nums font-bold tracking-tight text-foreground">
+                            {arrivalTime
+                            ? arrivalTime.toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                                })
+                            : "--:--"}
+                        </p>
+                        <Icons.Pencil className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                    )}
+                    </div>
+                    
+                    <div className="flex items-center justify-center gap-3 w-full">
+                        <Button
+                        variant={activeDurationMode === "full" ? "default" : "secondary"}
+                        size="sm"
+                        className="flex-1 transition-all active:scale-95 shadow-sm"
+                        onClick={() => onSetWorkDuration("full")}
+                        >
+                        Full Day
+                        </Button>
+                        <Button
+                        variant={activeDurationMode === "half" ? "default" : "secondary"}
+                        size="sm"
+                        className="flex-1 transition-all active:scale-95 shadow-sm"
+                        onClick={() => onSetWorkDuration("half")}
+                        >
+                        Half Day
+                        </Button>
+                    </div>
+                </>
+            )}
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg h-full flex flex-col">
-          <CardHeader>
-            <CardTitle className="font-headline text-xl flex items-center gap-2">
-              <Icons.Coffee className="text-amber-500" />
+        <Card 
+            className={`shadow-lg flex flex-col hover:shadow-xl transition-all duration-300 ${
+                isOnBreak ? "border-amber-500 bg-amber-500/5" : "border-amber-500/20"
+            }`}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="font-headline text-lg flex items-center gap-2">
+              <Icons.Coffee className={`h-5 w-5 ${isOnBreak ? "text-amber-600 animate-bounce" : "text-amber-500/70"}`} />
               Break Tracker
             </CardTitle>
-            <CardDescription>breaks from your schedule.</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col flex-grow justify-center items-center">
-            <div className="text-3xl font-bold font-mono">
-              {formatTime(totalBreakMinutes * 60 * 1000)}
+          <CardContent className="flex flex-col flex-grow justify-center items-center py-6">
+            <div 
+                className={`font-mono tabular-nums tracking-tighter font-bold text-5xl sm:text-6xl mb-4 ${
+                    isOnBreak ? "text-amber-600 animate-pulse" : "text-foreground"
+                }`}
+            >
+              {formatTime(totalBreakMs)}
             </div>
-            <p className="text-muted-foreground">Total break time today</p>
+            <Button 
+                variant={isOnBreak ? "destructive" : "secondary"}
+                className={`w-full max-w-[200px] font-semibold transition-all shadow-sm ${isOnBreak ? "hover:bg-red-600" : "hover:bg-secondary/80"}`}
+                onClick={onToggleBreak}
+                size="lg"
+            >
+                {isOnBreak ? "End Break" : "Start Break"}
+            </Button>
           </CardContent>
         </Card>
       </div>
-    </>
+
+      {logs && logs.length > 0 && (
+        <Card className="shadow-md w-full flex-1 min-h-0 flex flex-col border-muted bg-muted/20">
+            <CardHeader className="flex-none py-3 px-4 border-b bg-card rounded-t-lg">
+                <CardTitle className="font-headline text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                    <Icons.ListTodo className="h-4 w-4" />
+                    Session Logs
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 min-h-0 p-0 overflow-hidden bg-card/50">
+                <ScrollArea className="h-full w-full p-4">
+                    <div className="space-y-3">
+                        {logs.slice().reverse().map((log, index) => (
+                            <div key={index} className="flex items-center justify-between text-sm group hover:bg-muted/50 p-2 rounded-md transition-colors">
+                                <div className="flex items-center gap-3">
+                                     <div className={`p-1.5 rounded-full ${
+                                         log.type === 'punch-in' ? 'bg-green-100 dark:bg-green-900/30 text-green-600' :
+                                         log.type === 'break-start' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' :
+                                         log.type === 'break-end' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' :
+                                         'bg-gray-100 text-gray-600'
+                                     }`}>
+                                         {log.type === 'punch-in' && <Icons.Play className="h-3 w-3 fill-current" />}
+                                         {log.type === 'break-start' && <Icons.Coffee className="h-3 w-3" />}
+                                         {log.type === 'break-end' && <Icons.CheckCircle className="h-3 w-3" />}
+                                     </div>
+                                     <span className="font-medium text-foreground">{log.message}</span>
+                                </div>
+                                <span className="font-mono text-xs text-muted-foreground/70">
+                                    {format(new Date(log.timestamp), "hh:mm:ss a")}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </ScrollArea>
+            </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
