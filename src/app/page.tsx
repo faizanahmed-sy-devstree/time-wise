@@ -22,7 +22,7 @@ const APP_SETTINGS_KEY = "timewiseSettings";
 const APP_SESSION_KEY = "timewiseSession";
 
 export type LogEntry = {
-  type: "punch-in" | "break-start" | "break-end" | "reset";
+  type: "punch-in" | "break-start" | "break-end" | "reset" | "manual-break";
   timestamp: string;
   message: string;
 };
@@ -364,6 +364,29 @@ export default function Home() {
       }
   };
 
+  const handleAddManualBreak = (minutes: number) => {
+      const now = new Date();
+      const durationMs = minutes * 60 * 1000;
+      
+      const newLog: LogEntry = {
+          type: "manual-break",
+          timestamp: now.toISOString(),
+          message: `Manual Break (${minutes}m)`,
+      };
+
+      setSessionState(prev => ({
+          ...prev,
+          totalBreakMinutes: prev.totalBreakMinutes + minutes,
+          totalBreakMs: (prev.totalBreakMs || 0) + durationMs,
+          logs: [...(prev.logs || []), newLog]
+      }));
+      
+      toast({
+        title: "Manual Break Added",
+        description: `Added ${minutes} minutes of break time.`,
+      });
+  };
+
   if (!isClient) {
     return null;
   }
@@ -401,6 +424,7 @@ export default function Home() {
           totalBreakMs={currentTotalBreakMs}
           isOnBreak={sessionState.isOnBreak}
           onToggleBreak={handleToggleBreak}
+          onAddManualBreak={handleAddManualBreak}
           logs={sessionState.logs || []}
           fullDayHours={settings.fullDayHours}
           fullDayMinutes={settings.fullDayMinutes}

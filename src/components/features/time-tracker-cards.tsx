@@ -16,6 +16,12 @@ import { Icons } from "@/components/ui/icons";
 import { format } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { LogEntry } from "@/app/page";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface TimeTrackerCardsProps {
   isWorkDayOver: boolean;
@@ -36,6 +42,7 @@ interface TimeTrackerCardsProps {
   fullDayHours: string;
   fullDayMinutes: string;
   onDurationSettingsChange: (hours: string, minutes: string) => void;
+  onAddManualBreak: (minutes: number) => void;
 }
 
 export function TimeTrackerCards({
@@ -57,9 +64,12 @@ export function TimeTrackerCards({
   fullDayHours,
   fullDayMinutes,
   onDurationSettingsChange,
+  onAddManualBreak,
 }: TimeTrackerCardsProps) {
   const [isEditingStartTime, setIsEditingStartTime] = useState(false);
   const [isEditingDuration, setIsEditingDuration] = useState(false);
+  const [isAddingBreak, setIsAddingBreak] = useState(false);
+  const [manualBreakMinutes, setManualBreakMinutes] = useState("");
   const [tempHours, setTempHours] = useState(fullDayHours);
   const [tempMinutes, setTempMinutes] = useState(fullDayMinutes);
 
@@ -93,7 +103,17 @@ export function TimeTrackerCards({
       setIsEditingDuration(true);
   }
 
+  const handleAddBreak = () => {
+    const minutes = parseInt(manualBreakMinutes, 10);
+    if (!isNaN(minutes) && minutes > 0) {
+      onAddManualBreak(minutes);
+      setManualBreakMinutes("");
+      setIsAddingBreak(false);
+    }
+  };
+
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="flex flex-col gap-6 h-full font-sans">
       <Card 
         className={`text-center shadow-lg flex-none transition-all duration-300 hover:shadow-xl ${
@@ -147,14 +167,21 @@ export function TimeTrackerCards({
                   <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                   Session Info
               </span>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                onClick={startEditingDuration}
-              >
-                  <Icons.Settings className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-10 w-10 text-muted-foreground hover:text-foreground [&_svg]:size-6"
+                    onClick={startEditingDuration}
+                  >
+                      <Icons.Settings />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Edit Work Duration</p>
+                </TooltipContent>
+              </Tooltip>
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col flex-grow justify-center items-center space-y-6 py-4">
@@ -252,19 +279,60 @@ export function TimeTrackerCards({
             }`}
         >
           <CardHeader className="pb-2">
-            <CardTitle className="font-headline text-lg flex items-center gap-2">
-              <Icons.Coffee className={`h-5 w-5 ${isOnBreak ? "text-amber-600 animate-bounce" : "text-amber-500/70"}`} />
-              Break Tracker
+            <CardTitle className="font-headline text-lg flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Icons.Coffee className={`h-5 w-5 ${isOnBreak ? "text-amber-600 animate-bounce" : "text-amber-500/70"}`} />
+                Break Tracker
+              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-10 w-10 text-muted-foreground hover:text-foreground [&_svg]:size-6"
+                    onClick={() => setIsAddingBreak(!isAddingBreak)}
+                  >
+                      <Icons.Plus />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Add Manual Break Time</p>
+                </TooltipContent>
+              </Tooltip>
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col flex-grow justify-center items-center py-6">
-            <div 
-                className={`font-mono tabular-nums tracking-tighter font-bold text-5xl sm:text-6xl mb-4 ${
-                    isOnBreak ? "text-amber-600 animate-pulse" : "text-foreground"
-                }`}
-            >
-              {formatTime(totalBreakMs)}
-            </div>
+            {isAddingBreak ? (
+                <div className="w-full bg-muted/30 p-4 rounded-lg border border-muted animate-in fade-in zoom-in-95 space-y-3 mb-4">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Add Manual Break</Label>
+                    <div className="flex items-center gap-2">
+                         <div className="flex-1">
+                            <Input 
+                                value={manualBreakMinutes}
+                                onChange={(e) => setManualBreakMinutes(e.target.value)}
+                                className="h-9 font-mono text-center"
+                                placeholder="Min"
+                                type="number"
+                                autoFocus
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddBreak()}
+                            />
+                            <span className="text-[10px] text-muted-foreground text-center block mt-1">Minutes</span>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                        <Button size="sm" variant="outline" className="flex-1 h-8" onClick={() => setIsAddingBreak(false)}>Cancel</Button>
+                        <Button size="sm" className="flex-1 h-8" onClick={handleAddBreak}>Add</Button>
+                    </div>
+                </div>
+            ) : (
+                <div 
+                    className={`font-mono tabular-nums tracking-tighter font-bold text-5xl sm:text-6xl mb-4 ${
+                        isOnBreak ? "text-amber-600 animate-pulse" : "text-foreground"
+                    }`}
+                >
+                {formatTime(totalBreakMs)}
+                </div>
+            )}
             <Button 
                 variant={isOnBreak ? "destructive" : "secondary"}
                 className={`w-full max-w-[200px] font-semibold transition-all shadow-sm ${isOnBreak ? "hover:bg-red-600" : "hover:bg-secondary/80"}`}
@@ -295,11 +363,13 @@ export function TimeTrackerCards({
                                          log.type === 'punch-in' ? 'bg-green-100 dark:bg-green-900/30 text-green-600' :
                                          log.type === 'break-start' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' :
                                          log.type === 'break-end' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' :
+                                         log.type === 'manual-break' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600' :
                                          'bg-gray-100 text-gray-600'
                                      }`}>
                                          {log.type === 'punch-in' && <Icons.Play className="h-3 w-3 fill-current" />}
                                          {log.type === 'break-start' && <Icons.Coffee className="h-3 w-3" />}
                                          {log.type === 'break-end' && <Icons.CheckCircle className="h-3 w-3" />}
+                                         {log.type === 'manual-break' && <Icons.Plus className="h-3 w-3" />}
                                      </div>
                                      <span className="font-medium text-foreground">{log.message}</span>
                                 </div>
@@ -314,5 +384,6 @@ export function TimeTrackerCards({
         </Card>
       )}
     </div>
+    </TooltipProvider>
   );
 }
