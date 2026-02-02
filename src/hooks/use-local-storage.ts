@@ -20,7 +20,7 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
       return item ? JSON.parse(item) : initialValue;
     } catch (error) {
       // If error also return initialValue
-      console.error(error);
+      // Avoid console.error during render to prevent side-effects/toasts
       return initialValue;
     }
   });

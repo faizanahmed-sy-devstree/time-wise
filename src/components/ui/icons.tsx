@@ -26,6 +26,8 @@ import {
   CheckCircle,
   Settings,
   Info,
+  PictureInPicture,
+  Rocket,
   type LucideProps,
 } from 'lucide-react';
 
@@ -56,4 +58,6 @@ export const Icons = {
   CheckCircle,
   Settings,
   Info,
+  PictureInPicture,
+  Rocket,
 };
