@@ -1,0 +1,704 @@
+"use client";
+
+import { useState, useEffect, useMemo } from "react";
+import { format, differenceInMilliseconds, parse, isSameDay, addHours, differenceInMinutes } from "date-fns";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Icons } from "@/components/ui/icons";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useToast } from "@/hooks/use-toast";
+import { MewurkService, AttendanceData, CardDetailsResponse } from "@/services/mewurk";
+import { Progress } from "@/components/ui/progress";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+
+interface MewurkLogsProps {
+    targetHours: number;
+    targetMinutes: number;
+    onSettingsChange: (hours: string, minutes: string) => void;
+}
+
+export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: MewurkLogsProps) {
+  const { toast } = useToast();
+  
+  // Auth State
+  const [token, setToken] = useState<string | null>(null);
+  const [employeeCode, setEmployeeCode] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null); 
+
+  // Settings State
+  const [isEditingDuration, setIsEditingDuration] = useState(false);
+  const [tempHours, setTempHours] = useState(targetHours.toString());
+  const [tempMinutes, setTempMinutes] = useState(targetMinutes.toString());
+
+  // Login Form State
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  
+  // Data State
+  const [date, setDate] = useState(new Date());
+  const [data, setData] = useState<AttendanceData | null>(null);
+  const [monthStats, setMonthStats] = useState<CardDetailsResponse['data']['cardDetails'] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Time State (for live updates)
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Init temp state when props change
+  useEffect(() => {
+     setTempHours(targetHours.toString());
+     setTempMinutes(targetMinutes.toString());
+  }, [targetHours, targetMinutes]);
+
+  const handleSaveDuration = () => {
+      onSettingsChange(tempHours, tempMinutes);
+      setIsEditingDuration(false);
+  };
+
+  // Load auth from local storage on mount
+  useEffect(() => {
+    const storedToken = localStorage.getItem("mewurk_auth_token");
+    const storedEmpCode = localStorage.getItem("mewurk_employee_code");
+    const storedName = localStorage.getItem("mewurk_user_name");
+    
+    if (storedToken && storedEmpCode) {
+      setToken(storedToken);
+      setEmployeeCode(storedEmpCode);
+      if (storedName) setUserName(storedName);
+    }
+
+    // Timer for live calculation
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000 * 60); // every minute
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!email || !password) {
+          toast({ title: "Error", description: "Please enter both email and password.", variant: "destructive" });
+          return;
+      }
+
+      setIsLoggingIn(true);
+      setError(null);
+
+      try {
+          const lookupRes = await MewurkService.lookupUser(email);
+          if (!lookupRes.isSuccess || !lookupRes.data.tenantDetails.length) {
+              throw new Error("User not found or no tenant associated.");
+          }
+          const tenantId = lookupRes.data.tenantDetails[0].tenantId;
+
+          const loginRes = await MewurkService.loginUser(email, password, tenantId);
+          if (!loginRes.isSuccess) {
+              throw new Error(loginRes.message || "Login failed.");
+          }
+
+          const newToken = loginRes.data.token;
+          const newEmpCode = String(loginRes.data.userModel.employeeCode);
+          const newName = `${loginRes.data.userModel.firstName} ${loginRes.data.userModel.lastName}`;
+
+          localStorage.setItem("mewurk_auth_token", newToken);
+          localStorage.setItem("mewurk_employee_code", newEmpCode);
+          localStorage.setItem("mewurk_user_name", newName);
+
+          setToken(newToken);
+          setEmployeeCode(newEmpCode);
+          setUserName(newName);
+          setEmail("");
+          setPassword("");
+          
+          toast({ title: "Success", description: "Logged in to Mewurk successfully." });
+
+      } catch (err: any) {
+          setError(err.message || "Login failed. Please check credentials.");
+          toast({ title: "Login Failed", description: err.message, variant: "destructive" });
+      } finally {
+          setIsLoggingIn(false);
+      }
+  };
+
+  const handleLogout = () => {
+      localStorage.removeItem("mewurk_auth_token");
+      localStorage.removeItem("mewurk_employee_code");
+      localStorage.removeItem("mewurk_user_name");
+      setToken(null);
+      setEmployeeCode(null);
+      setUserName(null);
+      setData(null);
+      setMonthStats(null); // Clear month stats on logout
+  };
+
+  const fetchLogs = async () => {
+      if (!token || !employeeCode) return;
+
+      setLoading(true);
+      setError(null);
+      
+      try {
+          const formattedDate = format(date, "yyyy-MM-dd");
+          const year = date.getFullYear();
+          const month = date.getMonth() + 1; // 1-indexed for API
+
+          const [logsRes, statsRes] = await Promise.all([
+              MewurkService.fetchAttendanceLogs(formattedDate, token, employeeCode),
+              MewurkService.fetchCardDetails(token, employeeCode, year, month)
+          ]);
+
+          if (logsRes.isSuccess) {
+              setData(logsRes.data);
+          } else {
+              if (logsRes.statusCode === 401) {
+                  handleLogout();
+                  toast({ title: "Session Expired", description: "Please login again.", variant: "destructive" });
+                  return;
+              }
+              setError(logsRes.message || "Failed to fetch logs");
+          }
+
+          if (statsRes.isSuccess) {
+            setMonthStats(statsRes.data.cardDetails);
+          } else {
+            console.error("Failed to fetch month stats:", statsRes.message);
+            if (statsRes.statusCode === 401) {
+                handleLogout();
+                toast({ title: "Session Expired", description: "Please login again.", variant: "destructive" });
+                return;
+            }
+          }
+
+      } catch (err: any) {
+          console.error("Fetch error:", err);
+          if (err.message && err.message.includes("401")) {
+              handleLogout();
+              toast({ title: "Session Expired", description: "Please login again.", variant: "destructive" });
+          } else {
+              setError(err.message || "An error occurred");
+          }
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  useEffect(() => {
+      if (token && employeeCode) {
+          fetchLogs();
+      }
+  }, [date, token, employeeCode]);
+
+
+  // --- CALCULATIONS ---
+  const parseUtc = (dateStr: string) => {
+      if (!dateStr) return new Date();
+      // If ISO format (e.g. 2026-02-06T04:16:00), force UTC by adding Z if missing
+      if (dateStr.includes("T") && !dateStr.toLowerCase().includes("z")) {
+          return new Date(dateStr + "Z");
+      }
+      // If custom format "MM/dd/yyyy HH:mm:ss", parse manually as UTC
+      // e.g. "02/06/2026 10:31:00"
+      if (dateStr.match(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/)) {
+          const [datePart, timePart] = dateStr.split(' ');
+          const [month, day, year] = datePart.split('/');
+          const [hour, minute, second] = timePart.split(':');
+          return new Date(Date.UTC(+year, +month - 1, +day, +hour, +minute, +second));
+      }
+      return new Date(dateStr);
+  };
+
+  const stats = useMemo(() => {
+      if (!data || !data.clockInDetails.length) return null;
+
+      // Sort logs by time (Oldest -> Newest) to ensure accurate sequence
+      const logs = [...data.clockInDetails].sort((a, b) => {
+          return new Date(a.clockTime).getTime() - new Date(b.clockTime).getTime();
+      });
+      
+      const firstPunch = logs.find(l => l.inOutType === "IN");
+      const lastPunch = logs[logs.length - 1];
+      
+      let totalWorkMs = 0;
+      let totalBreakMs = 0;
+      let breakCount = 0;
+
+      // Calculate completed sessions
+      for (let i = 0; i < logs.length; i++) {
+            const current = logs[i];
+            const next = logs[i+1];
+            const currentDate = parseUtc(current.clockTime);
+
+            if (current.inOutType === "IN") {
+                if (next && next.inOutType === "OUT") {
+                    // Completed session
+                    const nextDate = parseUtc(next.clockTime);
+                    totalWorkMs += differenceInMilliseconds(nextDate, currentDate);
+                } else if (!next && isSameDay(currentDate, currentTime)) {
+                    // Ongoing session (if today)
+                    totalWorkMs += differenceInMilliseconds(currentTime, currentDate);
+                }
+            } else if (current.inOutType === "OUT") {
+                // Check for break
+                if (next && next.inOutType === "IN") {
+                    const nextDate = parseUtc(next.clockTime);
+                    breakCount++;
+                    totalBreakMs += differenceInMilliseconds(nextDate, currentDate);
+                }
+            }
+      }
+
+      // Shift Duration
+      // User specified working hours from settings
+      // We use this as the target for Progress and Remaining calculations
+      let shiftTotalMs = (targetHours * 60 * 60 * 1000) + (targetMinutes * 60 * 1000);
+
+      const remainingMs = Math.max(0, shiftTotalMs - totalWorkMs);
+      const progress = Math.min(100, (totalWorkMs / shiftTotalMs) * 100);
+      const estimatedEndTime = new Date(currentTime.getTime() + remainingMs);
+
+      return {
+          firstPunchTime: firstPunch ? parseUtc(firstPunch.clockTime) : null,
+          lastActivityTime: lastPunch ? parseUtc(lastPunch.clockTime) : null,
+          isWorking: lastPunch?.inOutType === "IN",
+          totalWorkMs,
+          totalBreakMs,
+          breakCount,
+          remainingMs,
+          progress,
+          shiftTotalMs,
+          estimatedEndTime
+      };
+  }, [data, currentTime]);
+
+  const formatHms = (ms: number) => {
+      const h = Math.floor(ms / (1000 * 60 * 60));
+      const m = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+      return `${h}h ${m}m`;
+  };
+
+  // Login View
+  if (!token) {
+      return (
+        <div className="flex h-full items-center justify-center p-4">
+            <Card className="w-full max-w-sm shadow-xl border-primary/10 bg-gradient-to-br from-card to-primary/5">
+                <CardHeader className="text-center pb-2">
+                    <div className="mx-auto bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mb-4">
+                         <Icons.Building className="h-6 w-6 text-primary" />
+                    </div>
+                    <CardTitle className="text-2xl font-bold text-foreground">Mewurk Connect</CardTitle>
+                    <CardDescription>Login with your corporate credentials</CardDescription>
+                </CardHeader>
+                <form onSubmit={handleLogin}>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="email">Email Address</Label>
+                            <Input 
+                                id="email" 
+                                type="email" 
+                                placeholder="name@company.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                disabled={isLoggingIn}
+                                className="bg-background/50"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="password">Password</Label>
+                            <Input 
+                                id="password" 
+                                type="password" 
+                                placeholder="••••••••"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                disabled={isLoggingIn}
+                                className="bg-background/50"
+                                required
+                            />
+                        </div>
+                        {error && (
+                            <div className="p-3 rounded-md bg-destructive/10 text-destructive text-xs font-medium flex items-center gap-2">
+                                <Icons.Info className="h-4 w-4" />
+                                {error}
+                            </div>
+                        )}
+                    </CardContent>
+                    <CardFooter>
+                        <Button type="submit" className="w-full shadow-lg shadow-primary/20" disabled={isLoggingIn}>
+                            {isLoggingIn ? (
+                                <>
+                                    <Icons.Loader className="mr-2 h-4 w-4 animate-spin" />
+                                    Verifying...
+                                </>
+                            ) : (
+                                <>
+                                    Login to Mewurk
+                                    <Icons.LogIn className="ml-2 h-4 w-4" />
+                                </>
+                            )}
+                        </Button>
+                    </CardFooter>
+                </form>
+            </Card>
+        </div>
+      );
+  }
+
+  // Logs View
+  return (
+    <div className="flex flex-col gap-4 h-full font-sans overflow-hidden">
+        {/* Header Badge */}
+        <Card className="flex-none shadow-md border-primary/20 bg-gradient-to-r from-card via-card to-primary/5 overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-3 opacity-5">
+                <Icons.Briefcase className="w-32 h-32 -mr-8 -mt-8" />
+            </div>
+            <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4 relative z-10">
+                <div className="flex items-center gap-3">
+                     <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                         <span className="font-bold text-primary text-sm">
+                             {userName ? userName.charAt(0).toUpperCase() : "U"}
+                         </span>
+                     </div>
+                     <div className="flex flex-col">
+                         <h3 className="font-bold text-base leading-none tracking-tight">{userName || "User"}</h3>
+                         <div className="flex items-center gap-1.5 mt-1">
+                             <span className="flex h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                             <span className="text-xs text-muted-foreground font-medium">Connected to Mewurk</span>
+                         </div>
+                     </div>
+                </div>
+                
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:flex-none">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                variant={"outline"}
+                                className={cn(
+                                    "w-full sm:w-[240px] justify-start text-left font-normal bg-background/80",
+                                    !date && "text-muted-foreground"
+                                )}
+                                >
+                                <Icons.Calendar className="mr-2 h-4 w-4" />
+                                {date ? format(date, "PPP") : <span>Pick a date</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="end">
+                                <Calendar
+                                mode="single"
+                                selected={date}
+                                onSelect={(newDate) => {
+                                    if(newDate) setDate(newDate);
+                                }}
+                                disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
+                                initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors" onClick={handleLogout} title="Logout">
+                        <Icons.LogOut className="h-4 w-4" />
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+
+        {/* Content */}
+        {loading ? (
+             <div className="flex-1 flex flex-col items-center justify-center gap-4 text-muted-foreground animate-in fade-in duration-500">
+                 <div className="relative">
+                    <Icons.Loader className="h-10 w-10 animate-spin text-primary" />
+                    <div className="absolute inset-0 h-10 w-10 animate-ping rounded-full border border-primary opacity-20"></div>
+                 </div>
+                 <p className="text-sm font-medium">Fetching Records...</p>
+             </div>
+        ) : data && stats ? (
+            <div className="flex-1 min-h-0 flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-500 overflow-hidden">
+                
+                {/* Monthly Overview */}
+                {monthStats && (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 flex-none">
+                        <Card className="bg-gradient-to-br from-emerald-500/5 to-transparent border-emerald-500/20">
+                            <CardHeader className="p-3 pb-1">
+                                <CardTitle className="text-xs font-semibold text-emerald-600 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Icons.CalendarCheck className="h-3.5 w-3.5" /> Present
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-3 pt-0">
+                                <div className="text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
+                                    {monthStats.present.totalPresent} <span className="text-xs font-sans font-medium text-muted-foreground ml-0.5">Days</span>
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card className="bg-gradient-to-br from-blue-500/5 to-transparent border-blue-500/20">
+                            <CardHeader className="p-3 pb-1">
+                                <CardTitle className="text-xs font-semibold text-blue-600 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Icons.Clock className="h-3.5 w-3.5" /> Avg Hours
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-3 pt-0">
+                                <div className="text-2xl font-bold font-mono text-blue-700 dark:text-blue-400">
+                                    {monthStats.workingHours.dayAvg.toFixed(1)} <span className="text-xs font-sans font-medium text-muted-foreground ml-0.5">Hrs/Day</span>
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card className="bg-gradient-to-br from-orange-500/5 to-transparent border-orange-500/20">
+                            <CardHeader className="p-3 pb-1">
+                                <CardTitle className="text-xs font-semibold text-orange-600 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Icons.AlertTriangle className="h-3.5 w-3.5" /> In/Out
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-3 pt-0 flex gap-3">
+                                <div>
+                                    <div className="text-xl font-bold font-mono text-orange-700 dark:text-orange-400">{monthStats.gracePeriod.lateIn}</div>
+                                    <div className="text-[10px] uppercase text-muted-foreground font-bold">Late</div>
+                                </div>
+                                <div className="w-px bg-orange-500/20" />
+                                <div>
+                                    <div className="text-xl font-bold font-mono text-orange-700 dark:text-orange-400">{monthStats.gracePeriod.earlyOut}</div>
+                                    <div className="text-[10px] uppercase text-muted-foreground font-bold">Early</div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                         <Card className="bg-gradient-to-br from-cyan-500/5 to-transparent border-cyan-500/20">
+                            <CardHeader className="p-3 pb-1">
+                                <CardTitle className="text-xs font-semibold text-cyan-600 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Icons.Coffee className="h-3.5 w-3.5" /> Off Days
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-3 pt-0">
+                                <div className="text-2xl font-bold font-mono text-cyan-700 dark:text-cyan-400">
+                                    {monthStats.offDays.totalWeekoff + monthStats.offDays.totalLeave + monthStats.offDays.totalHoliday} <span className="text-xs font-sans font-medium text-muted-foreground ml-0.5">Total</span>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                
+                {/* Left Column: Stats */}
+                <div className="lg:col-span-2 flex flex-col gap-4 h-full overflow-y-auto pr-1">
+                     
+                     {/* Time Progress */}
+                    <Card className="flex-none border-primary/20 bg-gradient-to-br from-card to-primary/5 transition-all duration-300">
+                        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+                             <CardTitle className="text-base font-medium text-muted-foreground">Session Progress</CardTitle>
+                             <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6 text-muted-foreground hover:text-foreground -mr-2"
+                                onClick={() => setIsEditingDuration(!isEditingDuration)}
+                             >
+                                 <Icons.Settings className="h-3.5 w-3.5" />
+                             </Button>
+                        </CardHeader>
+                        <CardContent>
+                             {isEditingDuration ? (
+                                <div className="space-y-3 pt-1 animate-in fade-in zoom-in-95">
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1">
+                                            <Input 
+                                                value={tempHours}
+                                                onChange={(e) => setTempHours(e.target.value)}
+                                                className="h-8 font-mono text-center text-sm"
+                                                placeholder="Hrs"
+                                            />
+                                            <span className="text-[9px] text-muted-foreground text-center block mt-1 uppercase tracking-wider">Hours</span>
+                                        </div>
+                                        <span className="font-bold text-muted-foreground">:</span>
+                                        <div className="flex-1">
+                                            <Input 
+                                                value={tempMinutes}
+                                                onChange={(e) => setTempMinutes(e.target.value)}
+                                                className="h-8 font-mono text-center text-sm"
+                                                placeholder="Min"
+                                            />
+                                            <span className="text-[9px] text-muted-foreground text-center block mt-1 uppercase tracking-wider">Mins</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button size="sm" variant="outline" className="flex-1 h-7 text-xs" onClick={() => setIsEditingDuration(false)}>Cancel</Button>
+                                        <Button size="sm" className="flex-1 h-7 text-xs" onClick={handleSaveDuration}>Save</Button>
+                                    </div>
+                                </div>
+                             ) : (
+                                <div className="animate-in fade-in zoom-in-95">
+                                    <div className="flex justify-between items-end mb-2">
+                                        <div className="flex items-baseline gap-1">
+                                            <span className="text-4xl font-bold font-mono tracking-tight text-primary">
+                                                {Math.round(stats.progress)}%
+                                            </span>
+                                        </div>
+                                        <span className="text-sm font-mono text-muted-foreground">
+                                             Goal: {targetHours}h {targetMinutes > 0 ? `${targetMinutes}m` : ''}
+                                        </span>
+                                    </div>
+                                    <Progress value={stats.progress} className="h-4" />
+                                    <div className="flex justify-between mt-3 text-sm font-mono text-muted-foreground font-medium">
+                                        <span>{formatHms(stats.totalWorkMs)} Worked</span>
+                                        <div className="text-right">
+                                            <span>{formatHms(stats.remainingMs)} Left</span>
+                                            <span className="text-xs text-muted-foreground ml-1.5 opacity-80 font-sans">
+                                                (Ends ~{format(stats.estimatedEndTime, "hh:mm a")})
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                             )}
+                        </CardContent>
+                    </Card>
+
+                    <div className="grid grid-cols-2 gap-4 flex-1">
+                         {/* First Punch */}
+                         <Card className="h-full flex flex-col justify-center">
+                             <CardHeader className="p-4 pb-2 space-y-0">
+                                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                    <Icons.Timer className="h-3 w-3" /> Started At
+                                </CardTitle>
+                             </CardHeader>
+                             <CardContent className="p-4 pt-0">
+                                 <div className="text-2xl sm:text-3xl font-bold font-mono">
+                                     {stats.firstPunchTime ? format(stats.firstPunchTime, "hh:mm a") : "--:--"}
+                                 </div>
+                             </CardContent>
+                         </Card>
+                         
+                          {/* Breaks */}
+                         <Card className="h-full flex flex-col justify-center">
+                             <CardHeader className="p-4 pb-2 space-y-0">
+                                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                     <Icons.Coffee className="h-3 w-3" /> Breaks
+                                </CardTitle>
+                             </CardHeader>
+                             <CardContent className="p-4 pt-0 flex items-center justify-between">
+                                 <div className="text-2xl sm:text-3xl font-bold font-mono">
+                                     {formatHms(stats.totalBreakMs)}
+                                 </div>
+                                 <div className="text-sm px-2.5 py-1 bg-secondary rounded-full font-medium">
+                                     {stats.breakCount}x
+                                 </div>
+                             </CardContent>
+                         </Card>
+
+                         {/* Shift Info (Compacted) */}
+                         <Card className="h-full flex flex-col justify-center overflow-hidden bg-gradient-to-br from-indigo-500/10 to-blue-500/10 border-indigo-500/20">
+                            <CardHeader className="p-4 pb-2 space-y-0">
+                                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                    <Icons.Briefcase className="h-3 w-3" /> Shift: {data.shiftName || "N/A"}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-4 pt-0">
+                                <div className="text-xl sm:text-2xl font-bold font-mono tracking-tight text-foreground/90">
+                                    {data.shiftStartTime && data.shiftEndTime 
+                                        ? `${data.shiftStartTime.split(' ')[1].slice(0,5)} - ${data.shiftEndTime.split(' ')[1].slice(0,5)}`
+                                        : "--:-- - --:--"}
+                                </div>
+                            </CardContent>
+                         </Card>
+
+                         {/* Policy Info (Compacted) */}
+                         <Card className="h-full flex flex-col justify-center overflow-hidden bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border-emerald-500/20">
+                            <CardHeader className="p-4 pb-2 space-y-0">
+                                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                    <Icons.FileText className="h-3 w-3" /> Policy
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-4 pt-0">
+                                <div className="text-sm sm:text-base font-semibold truncate text-foreground/90" title={data.policyName}>
+                                    {data.policyName}
+                                </div>
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">
+                                    Active Plan
+                                </div>
+                            </CardContent>
+                         </Card>
+                    </div>
+
+                </div>
+
+                {/* Right Column: Timeline */}
+                <Card className="lg:col-span-1 flex flex-col border-none shadow-lg bg-gradient-to-br from-card to-secondary/10 h-full overflow-hidden">
+                     <CardHeader className="flex-none py-3 px-4 border-b bg-muted/20">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="font-headline text-sm font-bold flex items-center gap-2">
+                                <Icons.ListTodo className="h-4 w-4 text-primary" />
+                                Timeline
+                            </CardTitle>
+                            <span className="text-[10px] font-mono text-muted-foreground bg-secondary px-1.5 py-0.5 rounded border">
+                                {data.clockInDetails.length} Entries
+                            </span>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="flex-1 min-h-0 p-0 overflow-hidden relative">
+                        <ScrollArea className="h-full w-full p-0">
+                             {data.clockInDetails.length > 0 ? (
+                                <div className="divide-y divide-border/40">
+                                    {data.clockInDetails.map((log, index) => {
+                                        const logTime = parseUtc(log.clockTime);
+                                        return (
+                                        <div key={index} className="flex items-center justify-between p-3 sm:p-4 hover:bg-muted/30 transition-colors group">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`shrink-0 h-9 w-9 rounded-full flex items-center justify-center shadow-sm border ${
+                                                    log.inOutType === 'IN' 
+                                                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' 
+                                                        : 'bg-orange-500/10 border-orange-500/20 text-orange-600 dark:text-orange-400'
+                                                }`}>
+                                                    {log.inOutType === 'IN' ? <Icons.LogIn className="h-4 w-4" /> : <Icons.LogOut className="h-4 w-4" />}
+                                                </div>
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className={`font-bold text-sm sm:text-base truncate ${log.inOutType === 'IN' ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                                                        {log.inOutType === 'IN' ? 'Walk In' : 'Walk Out'}
+                                                    </span>
+                                                    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5 truncate">
+                                                        <Icons.MapPin className="h-3.5 w-3.5 shrink-0" />
+                                                        <span className="truncate">
+                                                            {log.officeName || "Remote"}
+                                                            {log.deviceName && <span className="opacity-70 mx-1">• {log.deviceName}</span>}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <span className="font-mono text-base sm:text-lg font-bold text-foreground block">
+                                                    {format(logTime, "hh:mm")}
+                                                    <span className="text-xs text-muted-foreground ml-0.5 font-sans font-medium">{format(logTime, "a")}</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )})}
+                                </div>
+                             ) : (
+                                 <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-3 opacity-60 p-4 text-center">
+                                     <Icons.Ghost className="h-10 w-10" />
+                                     <p className="text-xs font-medium">No activity yet.</p>
+                                 </div>
+                             )}
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+            </div>
+            </div>
+        ) : (
+             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3 opacity-80">
+                 <Icons.Calendar className="h-12 w-12 stroke-1" />
+                 <p className="text-sm">Select a specific date to view attendance logs.</p>
+            </div>
+        )}
+    </div>
+  );
+}

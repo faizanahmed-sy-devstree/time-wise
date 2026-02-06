@@ -1,4 +1,4 @@
-
+ 
 import {
   Cog,
   Bot,
@@ -26,7 +26,16 @@ import {
   CheckCircle,
   Settings,
   Info,
-  type LucideProps,
+  LogIn,
+  LogOut,
+  Ghost,
+  User,
+  Calendar,
+  MapPin,
+  Building,
+  Timer,
+  CalendarCheck,
+  AlertTriangle,
 } from 'lucide-react';
 
 export const Icons = {
@@ -56,4 +65,14 @@ export const Icons = {
   CheckCircle,
   Settings,
   Info,
+  LogIn,
+  LogOut,
+  Ghost,
+  User,
+  Calendar,
+  MapPin,
+  Building,
+  Timer,
+  CalendarCheck,
+  AlertTriangle,
 };
