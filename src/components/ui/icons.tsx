@@ -36,6 +36,8 @@ import {
   Timer,
   CalendarCheck,
   AlertTriangle,
+  Flag,
+  Target
 } from 'lucide-react';
 
 export const Icons = {
@@ -75,4 +77,6 @@ export const Icons = {
   Timer,
   CalendarCheck,
   AlertTriangle,
+  Flag,
+  Target
 };

@@ -100,41 +100,73 @@ export function TimeTrackerCards({
             isWorkDayOver ? "border-orange-500/50 shadow-orange-500/10" : "border-primary/20 shadow-primary/5"
         }`}
       >
-        <CardHeader className="pb-2">
-          <CardTitle className="font-headline text-2xl text-primary tracking-tight">
-            {isWorkDayOver ? "Overtime" : "Time Remaining"}
+        <CardHeader className="pb-4">
+          <CardTitle className="font-headline text-lg text-muted-foreground uppercase tracking-widest text-sm font-semibold">
+            {isWorkDayOver ? "Overtime Session" : "Time Remaining"}
           </CardTitle>
-          {isValid && completionTime && (
-            <CardDescription className="font-medium">
-              {isWorkDayOver ? "Workday ended at" : "Ends around"}{" "}
-              <span className="text-foreground font-mono font-medium">{format(completionTime, "hh:mm a")}</span>
-              <span className="text-muted-foreground/80">
-                {" / Current: "}
-                <span className="font-mono">{format(currentTime, "hh:mm a")}</span>
-              </span>
-            </CardDescription>
-          )}
         </CardHeader>
-        <CardContent className="space-y-6 pb-6">
-          <div
-            className={`font-mono tabular-nums tracking-tighter font-bold text-5xl sm:text-6xl ${
-              isWorkDayOver 
-                ? "text-orange-600 drop-shadow-sm" 
-                : "text-foreground"
-            }`}
-          >
-            {isValid
-              ? formatTime(isWorkDayOver ? overtime : timeRemaining)
-              : "00:00:00"}
+        <CardContent className="space-y-8 pb-8">
+          <div className="flex flex-col items-center justify-center space-y-2">
+            <div
+              className={`font-mono tabular-nums tracking-tighter font-extrabold text-6xl sm:text-7xl ${
+                isWorkDayOver 
+                  ? "text-orange-600 drop-shadow-sm" 
+                  : "text-primary drop-shadow-sm"
+              }`}
+            >
+              {isValid
+                ? formatTime(isWorkDayOver ? overtime : timeRemaining)
+                : "00:00:00"}
+            </div>
+            {isWorkDayOver && (
+                <span className="text-xs font-semibold text-orange-600/80 bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded-full uppercase tracking-wide">
+                    Over Limit
+                </span>
+            )}
           </div>
-          <Progress 
-            value={isValid ? progress : 0} 
-            className={`h-3 w-full ${isWorkDayOver ? "bg-orange-100 dark:bg-orange-950/30" : ""}`}
-          />
-          {!isValid && (
-            <p className="text-sm text-destructive font-medium animate-pulse">
-              Please set a valid work duration in settings.
-            </p>
+
+          <div className="space-y-2.5">
+            <div className="flex justify-between text-xs font-medium text-muted-foreground px-1">
+                <span>Progress</span>
+                <span>{Math.round(progress)}%</span>
+            </div>
+            <Progress 
+                value={isValid ? progress : 0} 
+                className={`h-3 w-full rounded-full ${isWorkDayOver ? "bg-orange-100 dark:bg-orange-950/30" : "bg-primary/10"}`}
+            />
+          </div>
+
+          {isValid && completionTime ? (
+            <div className="grid grid-cols-2 gap-4 pt-2">
+                 <div className="flex flex-col items-center justify-center p-3 rounded-xl bg-muted/40 border border-muted/60 transition-colors hover:bg-muted/60">
+                    <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">
+                        {isWorkDayOver ? "Ended At" : "Completes At"}
+                    </span>
+                    <div className="flex items-center gap-1.5 text-foreground">
+                        <Icons.Clock className="w-3 h-3 text-primary/70" />
+                        <span className="text-xl font-mono font-bold tracking-tight">
+                            {format(completionTime, "hh:mm a")}
+                        </span>
+                    </div>
+                 </div>
+                 <div className="flex flex-col items-center justify-center p-3 rounded-xl bg-muted/40 border border-muted/60 transition-colors hover:bg-muted/60">
+                    <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">
+                        Current Time
+                    </span>
+                    <div className="flex items-center gap-1.5 text-foreground">
+                         <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                        <span className="text-xl font-mono font-bold tracking-tight">
+                            {format(currentTime, "hh:mm a")}
+                        </span>
+                    </div>
+                 </div>
+            </div>
+          ) : (
+            !isValid && (
+                <div className="p-4 rounded-lg bg-destructive/10 text-destructive text-sm font-medium animate-pulse border border-destructive/20">
+                    Please configure your work duration in settings to start tracking.
+                </div>
+            )
           )}
         </CardContent>
       </Card>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { format, differenceInMilliseconds, parse, isSameDay, addHours, differenceInMinutes } from "date-fns";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { format, differenceInMilliseconds, parse, isSameDay, addHours, differenceInMinutes, isValid } from "date-fns";
 import {
   Card,
   CardContent,
@@ -261,14 +261,38 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
             }
       }
 
-      // Shift Duration
-      // User specified working hours from settings
-      // We use this as the target for Progress and Remaining calculations
-      let shiftTotalMs = (targetHours * 60 * 60 * 1000) + (targetMinutes * 60 * 1000);
+      // Shift Duration Calculation
+      // Priority 1: Calculate from API provided shift times
+      // Priority 2: Default to 8 hours 15 minutes (29700000 ms)
+      let shiftTotalMs = 29700000; // Default 8h 15m
+      let usedShiftTimes = false;
 
-      const remainingMs = Math.max(0, shiftTotalMs - totalWorkMs);
+      if (data.shiftStartTime && data.shiftEndTime) {
+          try {
+              // Format is likely "yyyy-MM-dd HH:mm:ss" based on existing code usage
+              // We parse them as dates to get the difference
+              const shiftStart = parseUtc(data.shiftStartTime);
+              const shiftEnd = parseUtc(data.shiftEndTime);
+              
+              if (isValid(shiftStart) && isValid(shiftEnd)) {
+                  const diff = differenceInMilliseconds(shiftEnd, shiftStart);
+                  if (diff > 0) {
+                      shiftTotalMs = diff;
+                      usedShiftTimes = true;
+                  }
+              }
+          } catch (e) {
+              console.error("Failed to parse shift times for duration calculation", e);
+          }
+      }
+
+      const remainingMs = shiftTotalMs - totalWorkMs;
       const progress = Math.min(100, (totalWorkMs / shiftTotalMs) * 100);
       const estimatedEndTime = new Date(currentTime.getTime() + remainingMs);
+
+      // Calculate target hours/mins for display from the calculated Ms
+      const calculatedTargetHours = Math.floor(shiftTotalMs / (1000 * 60 * 60));
+      const calculatedTargetMinutes = Math.floor((shiftTotalMs % (1000 * 60 * 60)) / (1000 * 60));
 
       return {
           firstPunchTime: firstPunch ? parseUtc(firstPunch.clockTime) : null,
@@ -280,7 +304,10 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
           remainingMs,
           progress,
           shiftTotalMs,
-          estimatedEndTime
+          estimatedEndTime,
+          targetHours: calculatedTargetHours,
+          targetMinutes: calculatedTargetMinutes,
+          isDefaultAndMissing: !usedShiftTimes
       };
   }, [data, currentTime]);
 
@@ -289,6 +316,93 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
       const m = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
       return `${h}h ${m}m`;
   };
+
+  const BREAK_MESSAGES = [
+    "Time for a quick stretch! 🧘",
+    "Stay hydrated! 💧",
+    "Rest your eyes for 20 seconds. 👁️",
+    "Posture check! Sit up straight. 🪑",
+    "Take a deep breath. 🌬️",
+    "Quick walk around the room? 🚶",
+    "Relax your shoulders. 💆"
+  ];
+
+  // Notification Logic
+  const [hasNotifiedComplete, setHasNotifiedComplete] = useState(false);
+  const lastBreakNotification = useRef<number>(Date.now());
+  const completionTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  // Request Notification Permission on mount
+  useEffect(() => {
+      if ("Notification" in window && Notification.permission === "default") {
+          Notification.requestPermission();
+      }
+  }, []);
+
+  const sendNotification = (title: string, body: string) => {
+      // Always show toast
+      toast({
+          title,
+          description: body,
+          duration: 5000,
+          className: title.includes("Reached") ? "border-green-500 bg-green-50 dark:bg-green-900/10" : ""
+      });
+
+      // Show Browser Notification if permitted
+      if ("Notification" in window && Notification.permission === "granted") {
+          new Notification(title, {
+              body,
+              icon: "/favicon.ico", // Assuming standard nextjs favicon location
+              silent: false
+          });
+      }
+  };
+
+  // Reset notification state when date changes
+  useEffect(() => {
+      setHasNotifiedComplete(false);
+      lastBreakNotification.current = Date.now(); // Reset break timer
+  }, [date]);
+
+  // Handle Notifications based on stats
+  useEffect(() => {
+      if (!stats) return;
+
+      // 1. Work Complete Notification (Scheduled)
+      if (stats.remainingMs > 0) {
+          // Clear existing timeout to reschedule with new time
+          if (completionTimeout.current) clearTimeout(completionTimeout.current);
+          
+          // Schedule new timeout
+          completionTimeout.current = setTimeout(() => {
+              if (!hasNotifiedComplete) {
+                  sendNotification("🎉 Work Goal Reached!", "You've completed your daily target. Awesome work!");
+                  setHasNotifiedComplete(true);
+              }
+          }, stats.remainingMs);
+      } else if (stats.remainingMs <= 0 && !hasNotifiedComplete) {
+          // Already passed target (e.g. loaded page after completion)
+          // We fire immediately if we haven't notified yet in this session
+           sendNotification("🎉 Work Goal Reached!", "You've completed your daily target. Awesome work!");
+           setHasNotifiedComplete(true);
+      }
+
+      // 2. Break Reminder (Every Hour while working)
+      // Only fire if currently working and not just finished
+      if (stats.isWorking && stats.remainingMs > 0) {
+           const now = Date.now();
+           // Check if 1 hour (3600000 ms) has passed since last notification
+           if (now - lastBreakNotification.current >= 3600000) {
+               const randomMsg = BREAK_MESSAGES[Math.floor(Math.random() * BREAK_MESSAGES.length)];
+               sendNotification("🌱 Wellness Check", randomMsg);
+               lastBreakNotification.current = now;
+           }
+      }
+      
+      return () => {
+          if (completionTimeout.current) clearTimeout(completionTimeout.current);
+      }
+  }, [stats]); // stats updates every minute via currentTime
 
   // Login View
   if (!token) {
@@ -495,71 +609,73 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
                 <div className="lg:col-span-2 flex flex-col gap-4 h-full overflow-y-auto pr-1">
                      
                      {/* Time Progress */}
-                    <Card className="flex-none border-primary/20 bg-gradient-to-br from-card to-primary/5 transition-all duration-300">
-                        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-                             <CardTitle className="text-base font-medium text-muted-foreground">Session Progress</CardTitle>
-                             <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6 text-muted-foreground hover:text-foreground -mr-2"
-                                onClick={() => setIsEditingDuration(!isEditingDuration)}
-                             >
-                                 <Icons.Settings className="h-3.5 w-3.5" />
-                             </Button>
+                    <Card className="flex-none shadow-md border-primary/20 transition-all duration-300 hover:shadow-lg group relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity" />
+                        <CardHeader className="pb-2 pt-3 relative z-10 flex flex-row items-center justify-between space-y-0">
+                             <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                <Icons.Timer className="h-3.5 w-3.5 text-primary" />
+                                {stats.remainingMs > 0 ? "Time Remaining" : "Overtime Session"}
+                             </CardTitle>
                         </CardHeader>
-                        <CardContent>
-                             {isEditingDuration ? (
-                                <div className="space-y-3 pt-1 animate-in fade-in zoom-in-95">
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex-1">
-                                            <Input 
-                                                value={tempHours}
-                                                onChange={(e) => setTempHours(e.target.value)}
-                                                className="h-8 font-mono text-center text-sm"
-                                                placeholder="Hrs"
-                                            />
-                                            <span className="text-[9px] text-muted-foreground text-center block mt-1 uppercase tracking-wider">Hours</span>
+                        <CardContent className="relative z-10 p-3 pt-0 pb-3">
+                                <div className="animate-in fade-in zoom-in-95 space-y-3">
+                                    <div className="flex flex-col items-center justify-center space-y-0.5">
+                                        <div className={`text-5xl sm:text-6xl font-extrabold font-mono tracking-tighter tabular-nums leading-none ${
+                                            stats.remainingMs <= 0 ? "text-orange-600 dark:text-orange-500 drop-shadow-sm" : "text-foreground drop-shadow-sm"
+                                        }`}>
+                                            {formatHms(stats.remainingMs > 0 ? stats.remainingMs : Math.abs(stats.remainingMs))}
+                                            {stats.remainingMs <= 0 && <span className="text-sm align-top ml-0.5 text-orange-600 font-bold">+</span>}
                                         </div>
-                                        <span className="font-bold text-muted-foreground">:</span>
-                                        <div className="flex-1">
-                                            <Input 
-                                                value={tempMinutes}
-                                                onChange={(e) => setTempMinutes(e.target.value)}
-                                                className="h-8 font-mono text-center text-sm"
-                                                placeholder="Min"
+                                        {stats.remainingMs <= 0 && (
+                                            <span className="text-[10px] font-bold text-orange-600/90 bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 rounded-full uppercase tracking-wide shadow-sm border border-orange-200 dark:border-orange-800/50">
+                                                Over Target
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-1.5 px-1">
+                                        <div className="flex justify-between items-end">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Progress</span>
+                                            <span className="text-xs font-mono font-bold text-primary">{Math.round(stats.progress)}%</span>
+                                        </div>
+                                        <div className="relative h-2 w-full bg-secondary/50 rounded-full overflow-hidden shadow-inner">
+                                            <div 
+                                                className={`h-full transition-all duration-500 rounded-full ${stats.remainingMs <= 0 ? "bg-gradient-to-r from-orange-400 to-orange-600" : "bg-gradient-to-r from-blue-500 to-indigo-600"}`}
+                                                style={{ width: `${Math.min(100, stats.progress)}%` }}
                                             />
-                                            <span className="text-[9px] text-muted-foreground text-center block mt-1 uppercase tracking-wider">Mins</span>
                                         </div>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <Button size="sm" variant="outline" className="flex-1 h-7 text-xs" onClick={() => setIsEditingDuration(false)}>Cancel</Button>
-                                        <Button size="sm" className="flex-1 h-7 text-xs" onClick={handleSaveDuration}>Save</Button>
+                                    
+                                    <div className="grid grid-cols-2 gap-2 pt-1">
+                                         <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-secondary/40 border border-border/50">
+                                            <span className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground mb-0.5">
+                                                {stats.remainingMs <= 0 ? "Finished At" : "Completes At"}
+                                            </span>
+                                            <div className="flex items-center gap-1 text-foreground">
+                                                <Icons.Flag className="w-3 h-3 text-primary/70" />
+                                                <span className="text-xl font-mono font-bold tracking-tight">
+                                                    {format(stats.estimatedEndTime, "hh:mm a")}
+                                                </span>
+                                            </div>
+                                         </div>
+                                         <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-secondary/40 border border-border/50 relative overflow-hidden">
+                                            {stats.isDefaultAndMissing && (
+                                                <div className="absolute top-0 right-0 p-1 opacity-50" title="Using default 8h 15m duration (Shift times not detected)">
+                                                    <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                </div>
+                                            )}
+                                            <span className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground mb-0.5">
+                                                 Goal
+                                            </span>
+                                            <div className="flex items-center gap-1 text-foreground">
+                                                 <Icons.Target className="w-3 h-3 text-primary/70" />
+                                                <span className="text-xl font-mono font-bold tracking-tight">
+                                                    {stats.targetHours}h {stats.targetMinutes > 0 ? `${stats.targetMinutes}m` : ''}
+                                                </span>
+                                            </div>
+                                         </div>
                                     </div>
                                 </div>
-                             ) : (
-                                <div className="animate-in fade-in zoom-in-95">
-                                    <div className="flex justify-between items-end mb-2">
-                                        <div className="flex items-baseline gap-1">
-                                            <span className="text-4xl font-bold font-mono tracking-tight text-primary">
-                                                {Math.round(stats.progress)}%
-                                            </span>
-                                        </div>
-                                        <span className="text-sm font-mono text-muted-foreground">
-                                             Goal: {targetHours}h {targetMinutes > 0 ? `${targetMinutes}m` : ''}
-                                        </span>
-                                    </div>
-                                    <Progress value={stats.progress} className="h-4" />
-                                    <div className="flex justify-between mt-3 text-sm font-mono text-muted-foreground font-medium">
-                                        <span>{formatHms(stats.totalWorkMs)} Worked</span>
-                                        <div className="text-right">
-                                            <span>{formatHms(stats.remainingMs)} Left</span>
-                                            <span className="text-xs text-muted-foreground ml-1.5 opacity-80 font-sans">
-                                                (Ends ~{format(stats.estimatedEndTime, "hh:mm a")})
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                             )}
                         </CardContent>
                     </Card>
 
