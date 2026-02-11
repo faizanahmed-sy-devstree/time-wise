@@ -23,11 +23,8 @@ import { MewurkLogs } from "@/components/features/mewurk-logs";
 const APP_SETTINGS_KEY = "timewiseSettings";
 const APP_SESSION_KEY = "timewiseSession";
 
-export type LogEntry = {
-  type: "punch-in" | "break-start" | "break-end" | "reset";
-  timestamp: string;
-  message: string;
-};
+import { LogEntry } from "@/hooks/use-time-tracking";
+
 
 interface SessionState {
   sessionDate: string;
@@ -366,6 +363,50 @@ export default function Home() {
       }
   };
 
+  const handleAddManualBreak = (minutes: number) => {
+    const now = new Date();
+    const durationMs = minutes * 60 * 1000;
+    const isReduction = minutes < 0;
+
+    const newLog: LogEntry = {
+      type: "manual-break",
+      timestamp: now.toISOString(),
+      message: isReduction
+        ? `Break Adjustment (${minutes}m)`
+        : `Manual Break (+${minutes}m)`,
+      durationMs: durationMs,
+    };
+
+    setSessionState((prev) => {
+      // Prevent total from going below 0
+      const currentTotalMs = prev.totalBreakMs || 0;
+      const currentTotalMin = prev.totalBreakMinutes || 0;
+
+      if (isReduction && currentTotalMs + durationMs < 0) {
+        toast({
+          title: "Cannot Reduce Break",
+          description: "Break time cannot be negative.",
+          variant: "destructive",
+        });
+        return prev;
+      }
+
+      toast({
+        title: isReduction ? "Break Reduced" : "Break Added",
+        description: `${isReduction ? "Removed" : "Added"} ${Math.abs(
+          minutes
+        )} minutes.`,
+      });
+
+      return {
+        ...prev,
+        totalBreakMinutes: Math.max(0, currentTotalMin + minutes),
+        totalBreakMs: Math.max(0, currentTotalMs + durationMs),
+        logs: [...(prev.logs || []), newLog],
+      };
+    });
+  };
+
   if (!isClient) {
     return null;
   }
@@ -390,7 +431,7 @@ export default function Home() {
       <main className="w-full max-w-7xl mx-auto flex flex-col gap-6 flex-1 min-h-0">
         <Tabs defaultValue="tracker" className="h-full flex flex-col">
           <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="tracker">Time Tracker</TabsTrigger>
+            <TabsTrigger value="tracker">Manual Time Tracker</TabsTrigger>
             <TabsTrigger value="mewurk">Mewurk Logs</TabsTrigger>
           </TabsList>
           
@@ -431,6 +472,7 @@ export default function Home() {
                   }
                   toast({ title: "Updated", description: "Work duration settings updated." });
               }}
+              onAddManualBreak={handleAddManualBreak}
             />
           </TabsContent>
           

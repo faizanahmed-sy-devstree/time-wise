@@ -48,6 +48,7 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
   // Login Form State
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   
   // Data State
@@ -59,6 +60,9 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
 
   // Time State (for live updates)
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // UI State
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   // Init temp state when props change
   useEffect(() => {
@@ -84,7 +88,7 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
     }
 
     // Timer for live calculation
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000 * 60); // every minute
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000); // every second
     return () => clearInterval(timer);
   }, []);
 
@@ -232,36 +236,16 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
       const firstPunch = logs.find(l => l.inOutType === "IN");
       const lastPunch = logs[logs.length - 1];
       
+      let actualCompletionTime: Date | null = null;
+      let accumulatedWorkMs = 0;
+      let targetMet = false;
+
+      // Variables for break calculation
       let totalWorkMs = 0;
       let totalBreakMs = 0;
       let breakCount = 0;
 
-      // Calculate completed sessions
-      for (let i = 0; i < logs.length; i++) {
-            const current = logs[i];
-            const next = logs[i+1];
-            const currentDate = parseUtc(current.clockTime);
-
-            if (current.inOutType === "IN") {
-                if (next && next.inOutType === "OUT") {
-                    // Completed session
-                    const nextDate = parseUtc(next.clockTime);
-                    totalWorkMs += differenceInMilliseconds(nextDate, currentDate);
-                } else if (!next && isSameDay(currentDate, currentTime)) {
-                    // Ongoing session (if today)
-                    totalWorkMs += differenceInMilliseconds(currentTime, currentDate);
-                }
-            } else if (current.inOutType === "OUT") {
-                // Check for break
-                if (next && next.inOutType === "IN") {
-                    const nextDate = parseUtc(next.clockTime);
-                    breakCount++;
-                    totalBreakMs += differenceInMilliseconds(nextDate, currentDate);
-                }
-            }
-      }
-
-      // Shift Duration Calculation
+      // Calculate Shift Duration
       // Priority 1: Calculate from API provided shift times
       // Priority 2: Default to 8 hours 15 minutes (29700000 ms)
       let shiftTotalMs = 29700000; // Default 8h 15m
@@ -269,8 +253,6 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
 
       if (data.shiftStartTime && data.shiftEndTime) {
           try {
-              // Format is likely "yyyy-MM-dd HH:mm:ss" based on existing code usage
-              // We parse them as dates to get the difference
               const shiftStart = parseUtc(data.shiftStartTime);
               const shiftEnd = parseUtc(data.shiftEndTime);
               
@@ -286,11 +268,80 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
           }
       }
 
+      // First pass: Calculate accurate completion time based on logs
+      for (let i = 0; i < logs.length; i++) {
+            const current = logs[i];
+            const next = logs[i+1];
+            const currentDate = parseUtc(current.clockTime);
+
+            if (current.inOutType === "IN") {
+                if (next && next.inOutType === "OUT") {
+                    // Completed session
+                    const nextDate = parseUtc(next.clockTime);
+                    const sessionDuration = differenceInMilliseconds(nextDate, currentDate);
+                    
+                    if (!targetMet) {
+                        if (accumulatedWorkMs + sessionDuration >= shiftTotalMs) {
+                            // Target met during this session
+                            const remainingToTarget = shiftTotalMs - accumulatedWorkMs;
+                            actualCompletionTime = new Date(currentDate.getTime() + remainingToTarget);
+                            targetMet = true;
+                        }
+                    }
+                    accumulatedWorkMs += sessionDuration;
+
+                } else if (!next && isSameDay(currentDate, currentTime)) {
+                    // Ongoing session (if today)
+                    const sessionDuration = differenceInMilliseconds(currentTime, currentDate);
+                    
+                    if (!targetMet) {
+                         if (accumulatedWorkMs + sessionDuration >= shiftTotalMs) {
+                            // Target met just now/during current session
+                            const remainingToTarget = shiftTotalMs - accumulatedWorkMs;
+                            actualCompletionTime = new Date(currentDate.getTime() + remainingToTarget);
+                            targetMet = true;
+                        }
+                    }
+                    accumulatedWorkMs += sessionDuration;
+                }
+            }
+      }
+      
+      // Calculate breaks (separate loop or logic, reused from existing but kept clean)
+      // We need total work and break stats regardless of when target was met
+      // The loop above calculated accumulatedWorkMs correctly for total work including overtime
+      
+      // But we need to ensure we count breaks correctly too
+       for (let i = 0; i < logs.length; i++) {
+            const current = logs[i];
+            const next = logs[i+1];
+            const currentDate = parseUtc(current.clockTime);
+
+            if (current.inOutType === "OUT") {
+                // Check for break
+                if (next && next.inOutType === "IN") {
+                    const nextDate = parseUtc(next.clockTime);
+                    breakCount++;
+                    totalBreakMs += differenceInMilliseconds(nextDate, currentDate);
+                }
+            }
+       }
+
+      totalWorkMs = accumulatedWorkMs; // Assign to the returned var
+
       const remainingMs = shiftTotalMs - totalWorkMs;
       const progress = Math.min(100, (totalWorkMs / shiftTotalMs) * 100);
-      const estimatedEndTime = new Date(currentTime.getTime() + remainingMs);
+      
+      // If we haven't met target, Estimated is moving. If we met it, it's fixed.
+      // actually, estimatedEndTime is mainly for "When WILL I finish".
+      // actualCompletionTime is "When DID I finish".
+      // We can unify this: 
+      // If targetMet, use actualCompletionTime.
+      // If not met, use currentTime + remaining.
+      
+      const effectiveCompletionTime = actualCompletionTime || new Date(currentTime.getTime() + remainingMs);
 
-      // Calculate target hours/mins for display from the calculated Ms
+      // Calculate target hours/mins for display
       const calculatedTargetHours = Math.floor(shiftTotalMs / (1000 * 60 * 60));
       const calculatedTargetMinutes = Math.floor((shiftTotalMs % (1000 * 60 * 60)) / (1000 * 60));
 
@@ -304,7 +355,7 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
           remainingMs,
           progress,
           shiftTotalMs,
-          estimatedEndTime,
+          estimatedEndTime: effectiveCompletionTime,
           targetHours: calculatedTargetHours,
           targetMinutes: calculatedTargetMinutes,
           isDefaultAndMissing: !usedShiftTimes
@@ -314,95 +365,13 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
   const formatHms = (ms: number) => {
       const h = Math.floor(ms / (1000 * 60 * 60));
       const m = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-      return `${h}h ${m}m`;
+      const s = Math.floor((ms % (1000 * 60)) / 1000);
+      return `${h}h ${m}m ${s}s`;
   };
 
-  const BREAK_MESSAGES = [
-    "Time for a quick stretch! 🧘",
-    "Stay hydrated! 💧",
-    "Rest your eyes for 20 seconds. 👁️",
-    "Posture check! Sit up straight. 🪑",
-    "Take a deep breath. 🌬️",
-    "Quick walk around the room? 🚶",
-    "Relax your shoulders. 💆"
-  ];
 
-  // Notification Logic
-  const [hasNotifiedComplete, setHasNotifiedComplete] = useState(false);
-  const lastBreakNotification = useRef<number>(Date.now());
-  const completionTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // Request Notification Permission on mount
-  useEffect(() => {
-      if ("Notification" in window && Notification.permission === "default") {
-          Notification.requestPermission();
-      }
-  }, []);
 
-  const sendNotification = (title: string, body: string) => {
-      // Always show toast
-      toast({
-          title,
-          description: body,
-          duration: 5000,
-          className: title.includes("Reached") ? "border-green-500 bg-green-50 dark:bg-green-900/10" : ""
-      });
-
-      // Show Browser Notification if permitted
-      if ("Notification" in window && Notification.permission === "granted") {
-          new Notification(title, {
-              body,
-              icon: "/favicon.ico", // Assuming standard nextjs favicon location
-              silent: false
-          });
-      }
-  };
-
-  // Reset notification state when date changes
-  useEffect(() => {
-      setHasNotifiedComplete(false);
-      lastBreakNotification.current = Date.now(); // Reset break timer
-  }, [date]);
-
-  // Handle Notifications based on stats
-  useEffect(() => {
-      if (!stats) return;
-
-      // 1. Work Complete Notification (Scheduled)
-      if (stats.remainingMs > 0) {
-          // Clear existing timeout to reschedule with new time
-          if (completionTimeout.current) clearTimeout(completionTimeout.current);
-          
-          // Schedule new timeout
-          completionTimeout.current = setTimeout(() => {
-              if (!hasNotifiedComplete) {
-                  sendNotification("🎉 Work Goal Reached!", "You've completed your daily target. Awesome work!");
-                  setHasNotifiedComplete(true);
-              }
-          }, stats.remainingMs);
-      } else if (stats.remainingMs <= 0 && !hasNotifiedComplete) {
-          // Already passed target (e.g. loaded page after completion)
-          // We fire immediately if we haven't notified yet in this session
-           sendNotification("🎉 Work Goal Reached!", "You've completed your daily target. Awesome work!");
-           setHasNotifiedComplete(true);
-      }
-
-      // 2. Break Reminder (Every Hour while working)
-      // Only fire if currently working and not just finished
-      if (stats.isWorking && stats.remainingMs > 0) {
-           const now = Date.now();
-           // Check if 1 hour (3600000 ms) has passed since last notification
-           if (now - lastBreakNotification.current >= 3600000) {
-               const randomMsg = BREAK_MESSAGES[Math.floor(Math.random() * BREAK_MESSAGES.length)];
-               sendNotification("🌱 Wellness Check", randomMsg);
-               lastBreakNotification.current = now;
-           }
-      }
-      
-      return () => {
-          if (completionTimeout.current) clearTimeout(completionTimeout.current);
-      }
-  }, [stats]); // stats updates every minute via currentTime
 
   // Login View
   if (!token) {
@@ -433,16 +402,35 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="password">Password</Label>
-                            <Input 
-                                id="password" 
-                                type="password" 
-                                placeholder="••••••••"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                disabled={isLoggingIn}
-                                className="bg-background/50"
-                                required
-                            />
+                            <div className="relative">
+                                <Input 
+                                    id="password" 
+                                    type={showPassword ? "text" : "password"} 
+                                    placeholder="••••••••"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    disabled={isLoggingIn}
+                                    className="bg-background/50 pr-10"
+                                    required
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute right-0 top-0 h-full w-9 px-3 hover:bg-transparent"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    disabled={isLoggingIn}
+                                >
+                                    {showPassword ? (
+                                        <Icons.EyeOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                                    ) : (
+                                        <Icons.Eye className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                                    )}
+                                    <span className="sr-only">
+                                        {showPassword ? "Hide password" : "Show password"}
+                                    </span>
+                                </Button>
+                            </div>
                         </div>
                         {error && (
                             <div className="p-3 rounded-md bg-destructive/10 text-destructive text-xs font-medium flex items-center gap-2">
@@ -498,7 +486,7 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
                 
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                     <div className="relative flex-1 sm:flex-none">
-                        <Popover>
+                        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                             <PopoverTrigger asChild>
                                 <Button
                                 variant={"outline"}
@@ -516,7 +504,10 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
                                 mode="single"
                                 selected={date}
                                 onSelect={(newDate) => {
-                                    if(newDate) setDate(newDate);
+                                    if(newDate) {
+                                        setDate(newDate);
+                                        setIsCalendarOpen(false);
+                                    }
                                 }}
                                 disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
                                 initialFocus
