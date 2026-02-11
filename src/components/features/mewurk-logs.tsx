@@ -17,6 +17,7 @@ import { Icons } from "@/components/ui/icons";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { MewurkService, AttendanceData, CardDetailsResponse } from "@/services/mewurk";
+import { LoginForm } from "@/components/features/login/login-form";
 import { Progress } from "@/components/ui/progress";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -46,9 +47,7 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
   const [tempMinutes, setTempMinutes] = useState(targetMinutes.toString());
 
   // Login Form State
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  // Removed: Managed by LoginForm component now
   
   // Data State
   const [date, setDate] = useState(new Date());
@@ -88,50 +87,16 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
     return () => clearInterval(timer);
   }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!email || !password) {
-          toast({ title: "Error", description: "Please enter both email and password.", variant: "destructive" });
-          return;
-      }
+  const handleLoginSuccess = (newToken: string, newEmpCode: string, newName: string) => {
+      localStorage.setItem("mewurk_auth_token", newToken);
+      localStorage.setItem("mewurk_employee_code", newEmpCode);
+      localStorage.setItem("mewurk_user_name", newName);
 
-      setIsLoggingIn(true);
-      setError(null);
-
-      try {
-          const lookupRes = await MewurkService.lookupUser(email);
-          if (!lookupRes.isSuccess || !lookupRes.data.tenantDetails.length) {
-              throw new Error("User not found or no tenant associated.");
-          }
-          const tenantId = lookupRes.data.tenantDetails[0].tenantId;
-
-          const loginRes = await MewurkService.loginUser(email, password, tenantId);
-          if (!loginRes.isSuccess) {
-              throw new Error(loginRes.message || "Login failed.");
-          }
-
-          const newToken = loginRes.data.token;
-          const newEmpCode = String(loginRes.data.userModel.employeeCode);
-          const newName = `${loginRes.data.userModel.firstName} ${loginRes.data.userModel.lastName}`;
-
-          localStorage.setItem("mewurk_auth_token", newToken);
-          localStorage.setItem("mewurk_employee_code", newEmpCode);
-          localStorage.setItem("mewurk_user_name", newName);
-
-          setToken(newToken);
-          setEmployeeCode(newEmpCode);
-          setUserName(newName);
-          setEmail("");
-          setPassword("");
-          
-          toast({ title: "Success", description: "Logged in to Mewurk successfully." });
-
-      } catch (err: any) {
-          setError(err.message || "Login failed. Please check credentials.");
-          toast({ title: "Login Failed", description: err.message, variant: "destructive" });
-      } finally {
-          setIsLoggingIn(false);
-      }
+      setToken(newToken);
+      setEmployeeCode(newEmpCode);
+      setUserName(newName);
+      
+      // Toast handled in LoginForm
   };
 
   const handleLogout = () => {
@@ -407,74 +372,13 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
   // Login View
   if (!token) {
       return (
-        <div className="flex h-full items-center justify-center p-4">
-            <Card className="w-full max-w-sm shadow-xl border-primary/10 bg-gradient-to-br from-card to-primary/5">
-                <CardHeader className="text-center pb-2">
-                    <div className="mx-auto bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mb-4">
-                         <Icons.Building className="h-6 w-6 text-primary" />
-                    </div>
-                    <CardTitle className="text-2xl font-bold text-foreground">Mewurk Connect</CardTitle>
-                    <CardDescription>Login with your corporate credentials</CardDescription>
-                </CardHeader>
-                <form onSubmit={handleLogin}>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="email">Email Address</Label>
-                            <Input 
-                                id="email" 
-                                type="email" 
-                                placeholder="name@company.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                disabled={isLoggingIn}
-                                className="bg-background/50"
-                                required
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="password">Password</Label>
-                            <Input 
-                                id="password" 
-                                type="password" 
-                                placeholder="••••••••"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                disabled={isLoggingIn}
-                                className="bg-background/50"
-                                required
-                            />
-                        </div>
-                        {error && (
-                            <div className="p-3 rounded-md bg-destructive/10 text-destructive text-xs font-medium flex items-center gap-2">
-                                <Icons.Info className="h-4 w-4" />
-                                {error}
-                            </div>
-                        )}
-                    </CardContent>
-                    <CardFooter>
-                        <Button type="submit" className="w-full shadow-lg shadow-primary/20" disabled={isLoggingIn}>
-                            {isLoggingIn ? (
-                                <>
-                                    <Icons.Loader className="mr-2 h-4 w-4 animate-spin" />
-                                    Verifying...
-                                </>
-                            ) : (
-                                <>
-                                    Login to Mewurk
-                                    <Icons.LogIn className="ml-2 h-4 w-4" />
-                                </>
-                            )}
-                        </Button>
-                    </CardFooter>
-                </form>
-            </Card>
-        </div>
+        <LoginForm onLoginSuccess={handleLoginSuccess} />
       );
   }
 
   // Logs View
   return (
-    <div className="flex flex-col gap-4 h-full font-sans overflow-hidden">
+    <div className="flex flex-col gap-4 font-sans">
         {/* Header Badge */}
         <Card className="flex-none shadow-md border-primary/20 bg-gradient-to-r from-card via-card to-primary/5 overflow-hidden relative">
             <div className="absolute top-0 right-0 p-3 opacity-5">
@@ -541,7 +445,7 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
                  <p className="text-sm font-medium">Fetching Records...</p>
              </div>
         ) : data && stats ? (
-            <div className="flex-1 min-h-0 flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-500 overflow-hidden">
+            <div className="flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-500">
                 
                 {/* Monthly Overview */}
                 {monthStats && (
@@ -603,10 +507,10 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
                     </div>
                 )}
 
-                <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 
                 {/* Left Column: Stats */}
-                <div className="lg:col-span-2 flex flex-col gap-4 h-full overflow-y-auto pr-1">
+                <div className="lg:col-span-2 flex flex-col gap-4">
                      
                      {/* Time Progress */}
                     <Card className="flex-none shadow-md border-primary/20 transition-all duration-300 hover:shadow-lg group relative overflow-hidden">
@@ -748,8 +652,8 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
                 </div>
 
                 {/* Right Column: Timeline */}
-                <Card className="lg:col-span-1 flex flex-col border-none shadow-lg bg-gradient-to-br from-card to-secondary/10 h-full overflow-hidden">
-                     <CardHeader className="flex-none py-3 px-4 border-b bg-muted/20">
+                <Card className="lg:col-span-1 flex flex-col border-none shadow-lg bg-gradient-to-br from-card to-secondary/10">
+                     <CardHeader className="py-3 px-4 border-b bg-muted/20">
                         <div className="flex items-center justify-between">
                             <CardTitle className="font-headline text-sm font-bold flex items-center gap-2">
                                 <Icons.ListTodo className="h-4 w-4 text-primary" />
@@ -760,8 +664,8 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
                             </span>
                         </div>
                     </CardHeader>
-                    <CardContent className="flex-1 min-h-0 p-0 overflow-hidden relative">
-                        <ScrollArea className="h-full w-full p-0">
+                    <CardContent className="p-0 relative">
+                        <div className="w-full p-0">
                              {data.clockInDetails.length > 0 ? (
                                 <div className="divide-y divide-border/40">
                                     {data.clockInDetails.map((log, index) => {
@@ -804,7 +708,7 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
                                      <p className="text-xs font-medium">No activity yet.</p>
                                  </div>
                              )}
-                        </ScrollArea>
+                        </div>
                     </CardContent>
                 </Card>
             </div>
