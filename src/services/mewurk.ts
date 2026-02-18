@@ -55,9 +55,20 @@ export interface LoginResponse {
             firstName: string;
             lastName: string;
             email: string;
+            roleName: string; // Added roleName
             // ... other fields
         }
     }
+}
+
+export interface RefreshTokenResponse {
+  isSuccess: boolean;
+  statusCode: number;
+  message: string;
+  data: {
+    token: string;
+    refreshToken: string;
+  };
 }
 
 export interface CardDetailsResponse {
@@ -167,8 +178,33 @@ export const MewurkService = {
               otp: null
           })
       });
-
       if (!response.ok) throw new Error(`Login Failed: ${response.status}`);
       return response.json();
+  },
+
+  refreshToken: async (refreshToken: string): Promise<RefreshTokenResponse> => {
+    try {
+      const response = await fetch(
+        "https://app.mewurk.com/api/v1/userservice/account/refreshtoken",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ refreshToken }),
+        }
+      );
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Refresh token error:", error);
+      return {
+        isSuccess: false,
+        statusCode: 500,
+        message: "Network error during token refresh",
+        data: {} as any,
+      };
+    }
   }
 };

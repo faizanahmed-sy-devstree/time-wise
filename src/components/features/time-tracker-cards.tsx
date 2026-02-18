@@ -43,6 +43,7 @@ interface TimeTrackerCardsProps {
   fullDayMinutes: string;
   onDurationSettingsChange: (hours: string, minutes: string) => void;
   onAddManualBreak: (minutes: number) => void;
+  workDoneMs: number;
 }
 
 export function TimeTrackerCards({
@@ -65,6 +66,7 @@ export function TimeTrackerCards({
   fullDayMinutes,
   onDurationSettingsChange,
   onAddManualBreak,
+  workDoneMs,
 }: TimeTrackerCardsProps) {
   const [isEditingStartTime, setIsEditingStartTime] = useState(false);
   const [isEditingDuration, setIsEditingDuration] = useState(false);
@@ -127,12 +129,12 @@ export function TimeTrackerCards({
             isWorkDayOver ? "border-orange-500/50 shadow-orange-500/10" : "border-primary/20 shadow-primary/5"
         }`}
       >
-        <CardHeader className="pb-4">
+        <CardHeader className="pb-2">
           <CardTitle className="font-headline text-lg text-muted-foreground uppercase tracking-widest text-sm font-semibold">
             {isWorkDayOver ? "Overtime Session" : "Time Remaining"}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6 pb-6 pt-4">
+        <CardContent className="space-y-4 pb-4 pt-2">
           <div className="flex flex-col items-center justify-center space-y-2">
             <div
               className={`font-mono tabular-nums tracking-tighter font-extrabold text-5xl sm:text-6xl ${
@@ -145,6 +147,16 @@ export function TimeTrackerCards({
                 ? formatTime(isWorkDayOver ? overtime : timeRemaining)
                 : "00:00:00"}
             </div>
+            
+             {isValid && (
+                  <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 px-3 py-1 rounded-full animate-in fade-in slide-in-from-bottom-2 mt-0.5">
+                     <span className="text-[10px] uppercase font-bold tracking-widest">Time Spent</span>
+                     <span className="text-lg font-mono font-bold text-foreground">
+                         {formatTime(workDoneMs)}
+                     </span>
+                  </div>
+             )}
+
             {isWorkDayOver && (
                 <span className="text-[10px] font-semibold text-orange-600/80 bg-orange-100 dark:bg-orange-900/30 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
                     Over Limit

@@ -92,6 +92,29 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
     return () => clearInterval(timer);
   }, []);
 
+  const refreshSession = async () => {
+      const storedRefreshToken = localStorage.getItem("mewurk_refresh_token");
+      if (!storedRefreshToken) return false;
+
+      try {
+          const res = await MewurkService.refreshToken(storedRefreshToken);
+          if (res.isSuccess && res.data.token) {
+              const newToken = res.data.token;
+              const newRefreshToken = res.data.refreshToken;
+              
+              localStorage.setItem("mewurk_auth_token", newToken);
+              if (newRefreshToken) {
+                  localStorage.setItem("mewurk_refresh_token", newRefreshToken);
+              }
+              setToken(newToken);
+              return true;
+          }
+      } catch (e) {
+          console.error("Auto-login failed:", e);
+      }
+      return false;
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!email || !password) {
@@ -119,6 +142,9 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
           const newName = `${loginRes.data.userModel.firstName} ${loginRes.data.userModel.lastName}`;
 
           localStorage.setItem("mewurk_auth_token", newToken);
+          if (loginRes.data.refreshToken) {
+              localStorage.setItem("mewurk_refresh_token", loginRes.data.refreshToken);
+          }
           localStorage.setItem("mewurk_employee_code", newEmpCode);
           localStorage.setItem("mewurk_user_name", newName);
 
@@ -140,6 +166,7 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
 
   const handleLogout = () => {
       localStorage.removeItem("mewurk_auth_token");
+      localStorage.removeItem("mewurk_refresh_token");
       localStorage.removeItem("mewurk_employee_code");
       localStorage.removeItem("mewurk_user_name");
       setToken(null);
@@ -169,6 +196,13 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
               setData(logsRes.data);
           } else {
               if (logsRes.statusCode === 401) {
+                  // Try to refresh token
+                  const refreshed = await refreshSession();
+                  if (refreshed) {
+                      // Retry fetch (will happen automatically due to token dependency in useEffect)
+                      return;
+                  }
+                  
                   handleLogout();
                   toast({ title: "Session Expired", description: "Please login again.", variant: "destructive" });
                   return;
@@ -622,6 +656,12 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
                                                 Over Target
                                             </span>
                                         )}
+                                        <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 px-4 py-1.5 rounded-full animate-in fade-in slide-in-from-bottom-2 mt-2">
+                                            <span className="text-xs uppercase font-bold tracking-widest">Time Spent</span>
+                                            <span className="text-xl font-mono font-bold text-foreground">
+                                                {formatHms(stats.totalWorkMs)}
+                                            </span>
+                                        </div>
                                     </div>
 
                                     <div className="space-y-1.5 px-1">

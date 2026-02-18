@@ -175,6 +175,7 @@ export default function Home() {
     isWorkDayOver,
     isValid: isDurationValid,
     currentTotalBreakMs,
+    workDoneMs,
   } = useMemo(() => {
     if (!isClient || !sessionState.startTime)
       return {
@@ -186,6 +187,7 @@ export default function Home() {
         isWorkDayOver: false,
         isValid: false,
         currentTotalBreakMs: 0,
+        workDoneMs: 0,
       };
 
     const workingHours = activeDuration.hours;
@@ -201,6 +203,7 @@ export default function Home() {
         isWorkDayOver: false,
         isValid: false,
         currentTotalBreakMs: 0,
+        workDoneMs: 0,
       };
     }
 
@@ -215,6 +218,7 @@ export default function Home() {
         isWorkDayOver: false,
         isValid: false,
          currentTotalBreakMs: 0,
+         workDoneMs: 0,
       };
     }
     const workingMs = (workingHours * 60 + workingMinutes) * 60 * 1000;
@@ -255,6 +259,7 @@ export default function Home() {
       isWorkDayOver: timeRemainingMs <= 0,
       isValid: workingMs > 0,
       currentTotalBreakMs: totalBreakTimeMs,
+      workDoneMs: Math.max(0, workDoneMs),
     };
   }, [
     activeDuration,
@@ -449,6 +454,7 @@ export default function Home() {
               arrivalTime={arrivalTime}
               onStartTimeChange={handleStartTimeChange}
               totalBreakMs={currentTotalBreakMs}
+              workDoneMs={workDoneMs}
               isOnBreak={sessionState.isOnBreak}
               onToggleBreak={handleToggleBreak}
               logs={sessionState.logs || []}
