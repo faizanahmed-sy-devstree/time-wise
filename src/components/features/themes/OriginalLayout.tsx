@@ -21,17 +21,15 @@ export function OriginalLayout({
 
   return (
     /* 
-       Mobile: flex-col (stack), auto height
-       Desktop: grid-12, fixed height (calc)
+       Desktop: We set a hard height on the container so the grid can calculate h-full 
     */
-    <div className="h-full flex flex-col lg:grid lg:grid-cols-12 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700 lg:max-h-[calc(100vh-140px)]">
+    <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700 lg:h-[calc(100vh-280px)]">
       
-      {/* LEFT COLUMN: Main Stats & Timer (8/12 on desktop) */}
-      <div className="lg:col-span-8 flex flex-col gap-4 h-full order-1">
+      {/* LEFT COLUMN: Main Stats & Timer (8/12) */}
+      <div className="lg:col-span-8 flex flex-col gap-4 lg:h-full order-1">
         
         {/* 1. Main Hero Card */}
-        <Card className="relative p-6 lg:p-10 rounded-[2rem] lg:rounded-[2.5rem] bg-[#09090b] border-white/5 shadow-2xl overflow-hidden flex flex-col justify-center min-h-[350px] lg:min-h-0 lg:flex-1">
-          {/* Background Glow */}
+        <Card className="relative p-6 lg:p-10 rounded-[2rem] lg:rounded-[2.5rem] bg-[#09090b] border-white/5 shadow-2xl overflow-hidden flex flex-col justify-center min-h-[350px] lg:flex-1">
           <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 lg:w-96 lg:h-96 bg-primary/10 rounded-full blur-[80px] lg:blur-[120px] pointer-events-none opacity-40" />
           
           <div className="relative z-10 flex flex-col items-center">
@@ -45,7 +43,6 @@ export function OriginalLayout({
               {stats.remainingMs > 0 ? "Time remaining today" : "Overtime accrued"}
             </span>
             
-            {/* Timer: Responsive text sizing */}
             <div className={cn(
               "text-5xl md:text-7xl lg:text-8xl font-black font-mono tracking-tighter tabular-nums leading-none mb-8 drop-shadow-[0_0_30px_rgba(255,255,255,0.05)] text-center",
               stats.remainingMs <= 0 ? "text-rose-500" : "text-white"
@@ -53,7 +50,6 @@ export function OriginalLayout({
               {formatHms(stats.remainingMs)}
             </div>
 
-            {/* 4-Column Grid Stats (2x2 on mobile, 4x1 on desktop) */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
               <StatBlock 
                 label="Started" 
@@ -81,7 +77,6 @@ export function OriginalLayout({
               />
             </div>
             
-            {/* Progress Bar */}
             <div className="w-full mt-8 space-y-2">
                <div className="flex justify-between items-center px-1">
                   <span className="text-[10px] font-semibold text-white/30 tracking-tight">Shift progress</span>
@@ -97,7 +92,7 @@ export function OriginalLayout({
           </div>
         </Card>
 
-        {/* Footer Metrics (2x2 on mobile, 4x1 on desktop) */}
+        {/* Footer Metrics */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 order-3 lg:order-2">
           <FooterMetric label="Policy" value={data.policyName} />
           <FooterMetric label="Shift" value={data.shiftName} />
@@ -106,8 +101,8 @@ export function OriginalLayout({
         </div>
       </div>
 
-      {/* RIGHT COLUMN: Activity History (4/12 on desktop) */}
-      <Card className="lg:col-span-4 p-5 lg:p-6 rounded-[2rem] lg:rounded-[2.5rem] bg-card border-white/5 shadow-xl flex flex-col overflow-hidden h-[400px] lg:h-auto lg:max-h-full order-2 lg:order-3">
+      {/* RIGHT COLUMN: Activity History (Fixed Height with Independent Scroll) */}
+      <Card className="lg:col-span-4 p-5 lg:p-6 rounded-[2rem] lg:rounded-[2.5rem] bg-card border-white/5 shadow-xl flex flex-col lg:h-full order-2 lg:order-3 overflow-hidden">
         <div className="flex items-center justify-between mb-6 flex-none">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-xl">
@@ -120,20 +115,15 @@ export function OriginalLayout({
           </span>
         </div>
 
-        {/* 
-           On Desktop: ScrollArea handles internal scroll 
-           On Mobile: ScrollArea height is fixed so it doesn't expand infinitely
-        */}
-        <ScrollArea className="flex-1 pr-4">
+        {/* The min-h-0 and flex-1 are key for independent scrolling in flex-col */}
+        <ScrollArea className="flex-1 min-h-0 pr-4">
           <div className="relative pl-8 space-y-6 lg:space-y-8 py-2">
-            {/* Vertical Line */}
             <div className="absolute left-[15px] top-0 bottom-0 w-px bg-white/10" />
 
-            {logs.map((l, i) => {
+           {Array.from({ length: 10 }).flatMap(() => logs).map((l, i) => {
               const isPunchIn = l.inOutType === "IN";
               return (
                 <div key={i} className="relative flex items-center justify-between group">
-                  {/* Timeline Dot */}
                   <div className={cn(
                     "absolute -left-[24px] w-3.5 h-3.5 rounded-full border-2 bg-[#09090b] z-10 transition-transform group-hover:scale-125",
                     isPunchIn ? "border-emerald-500" : "border-orange-500"
@@ -167,8 +157,6 @@ export function OriginalLayout({
     </div>
   );
 }
-
-/* Sub-components */
 
 function StatBlock({ label, value, icon, className }: { label: string; value: string; icon: React.ReactNode; className: string }) {
   return (

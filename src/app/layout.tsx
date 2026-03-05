@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/components/theme-provider';
+import { DesignThemeProvider } from '@/components/design-theme-provider';
 import { Analytics } from '@vercel/analytics/next';
 
 export const metadata: Metadata = {
@@ -26,13 +27,15 @@ export default function RootLayout({
       </head>
       <body className="font-body font-headline antialiased">
         <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-          {children}
-          <Toaster />
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <DesignThemeProvider>
+            {children}
+            <Toaster />
+          </DesignThemeProvider>
         </ThemeProvider>
         <Analytics />
       </body>

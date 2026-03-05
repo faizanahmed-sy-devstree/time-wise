@@ -14,6 +14,7 @@ import {
 
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { DesignThemeSwitcher } from "@/components/design-theme-switcher";
 import { TimeTrackerCards } from "@/components/features/time-tracker-cards";
 import { WelcomeDialog } from "@/components/features/welcome-dialog";
 import { AboutSheet } from "@/components/features/about-sheet";
@@ -415,19 +416,20 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-background via-secondary/20 to-background">
+    <div className="flex flex-col h-screen overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-background via-secondary/20 to-background design-theme-root">
       <WelcomeDialog open={isWelcomeDialogOpen} onOpenChange={setIsWelcomeDialogOpen} />
 
       <Tabs defaultValue="mewurk" className="h-full flex flex-col">
-        <header className="w-full max-w-7xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 mx-auto flex-none">
+        <header className="w-full max-w-7xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 mx-auto flex-none design-theme-component">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold font-headline text-primary whitespace-nowrap">TimeWise</h1>
-            <TabsList className="grid grid-cols-2 w-full sm:w-auto">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold font-headline text-primary whitespace-nowrap design-theme-title">TimeWise</h1>
+            <TabsList className="grid grid-cols-2 w-full sm:w-auto design-theme-tabs">
               <TabsTrigger value="tracker" className="text-xs sm:text-sm">Manual Time Tracker</TabsTrigger>
               <TabsTrigger value="mewurk" className="text-xs sm:text-sm">Mewurk Logs</TabsTrigger>
             </TabsList>
           </div>
           <div className="flex items-center gap-2 self-stretch sm:self-auto">
+            <DesignThemeSwitcher />
             <ThemeToggle />
             <AboutSheet isOpen={isAboutSheetOpen} onOpenChange={setIsAboutSheetOpen} />
           </div>
@@ -500,14 +502,14 @@ export default function Home() {
         </main>
       </Tabs>
 
-      <footer className="w-full max-w-7xl mx-auto text-center pt-4 pb-2 flex-none">
-        <p className="text-sm text-muted-foreground px-4 sm:px-6">
+      <footer className="w-full max-w-7xl mx-auto text-center pt-4 pb-2 flex-none design-theme-component">
+        <p className="text-sm text-muted-foreground px-4 sm:px-6 design-theme-text">
           Built by{" "}
           <a
             href="https://www.linkedin.com/in/mitulparmar11/"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-semibold text-primary hover:underline"
+            className="font-semibold text-primary hover:underline design-theme-link"
           >
             Mitul Parmar
           </a>{" "}
@@ -516,15 +518,15 @@ export default function Home() {
             href="https://github.com/mitulparmar7161/time-wise.git"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-semibold text-primary hover:underline"
+            className="font-semibold text-primary hover:underline design-theme-link"
           >
             open source
           </a>
           ){" "}
-          <span className="text-muted-foreground">•</span>{" "}
+          <span className="text-muted-foreground design-theme-separator">•</span>{" "}
           <button
             onClick={() => setIsAboutSheetOpen(true)}
-            className="font-semibold text-primary hover:underline transition-colors"
+            className="font-semibold text-primary hover:underline transition-colors design-theme-button"
           >
             More
           </button>

@@ -44,6 +44,7 @@ import { MonitorLayout } from "./themes/MonitorLayout";
 import { EditorialLayout } from "./themes/EditorialLayout";
 import { OrganicLayout } from "./themes/OrganicLayout";
 import { TypographicLayout } from "./themes/TypographicLayout";
+import { useDesignTheme } from "@/components/design-theme-provider";
 
 export interface MewurkThemeProps {
   data: AttendanceData;
@@ -73,6 +74,7 @@ interface MewurkLogsProps {
 export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: MewurkLogsProps) {
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
+  const { designTheme, setDesignTheme } = useDesignTheme();
 
   // Auth State
   const [token, setToken] = useState<string | null>(null);
@@ -100,7 +102,6 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
 
   // UI State
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [designTheme, setDesignTheme] = useState("original");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
@@ -325,8 +326,8 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
               <DropdownMenu>
                 <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="capitalize"><Icons.Palette className="mr-2 h-4 w-4" />{designTheme}</Button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {["original", "technical", "hardware", "minimal", "brutalist", "lumia", "monitor", "editorial", "organic", "typographic"].map(t => (
-                    <DropdownMenuItem key={t} onClick={() => setDesignTheme(t)} className="capitalize">{t}</DropdownMenuItem>
+                  {["original", "technical", "hardware", "minimal", "brutalist", "lumina", "monitor", "editorial", "organic", "typographic"].map((t: any) => (
+                    <DropdownMenuItem key={t} onClick={() => setDesignTheme(t as any)} className="capitalize">{t}</DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -353,7 +354,7 @@ export function MewurkLogs({ targetHours, targetMinutes, onSettingsChange }: Mew
             {designTheme === "hardware" && <HardwareLayout {...themeProps} />}
             {designTheme === "minimal" && <MinimalLayout {...themeProps} />}
             {designTheme === "brutalist" && <BrutalistLayout {...themeProps} />}
-            {designTheme === "lumia" && <LuminaLayout {...themeProps} />}
+            {designTheme === "lumina" && <LuminaLayout {...themeProps} />}
             {designTheme === "monitor" && <MonitorLayout {...themeProps} />}
             {designTheme === "editorial" && <EditorialLayout {...themeProps} />}
             {designTheme === "organic" && <OrganicLayout {...themeProps} />}

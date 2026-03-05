@@ -66,3 +66,308 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Design Theme: Brutalist - Override ALL color variables */
+.design-theme-brutalist {
+  /* Core colors - Override ALL theme variables */
+  --background: 0 0% 100%;
+  --foreground: 0 0% 0%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 0%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 0%;
+  --primary: 221 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 60 100% 50%;
+  --secondary-foreground: 0 0% 0%;
+  --muted: 60 50% 90%;
+  --muted-foreground: 0 0% 40%;
+  --accent: 120 100% 50%;
+  --accent-foreground: 0 0% 0%;
+  --destructive: 0 100% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 0%;
+  --input: 0 0% 0%;
+  --ring: 221 100% 50%;
+  --chart-1: 220 70% 50%;
+  --chart-2: 160 60% 45%;
+  --chart-3: 30 80% 55%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 340 75% 55%;
+
+  /* Brutalist specific */
+  --brutalist-border: 4px;
+  --brutalist-shadow: 8px 8px 0px 0px rgba(0, 0, 0, 1);
+  --brutalist-bg: #ffffff;
+  --brutalist-text: #000000;
+  --brutalist-accent-green: #00ff00;
+  --brutalist-accent-yellow: #ffff00;
+  --brutalist-accent-blue: #00ffff;
+  --brutalist-accent-orange: #ffa500;
+  --brutalist-accent-red: #ff0000;
+}
+
+/* Force background and text color changes everywhere */
+.design-theme-brutalist body,
+.design-theme-brutalist html {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+.design-theme-brutalist {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+.design-theme-brutalist .bg-background,
+.design-theme-brutalist [class*="bg-background"] {
+  background-color: #ffffff !important;
+}
+
+.design-theme-brutalist .text-foreground,
+.design-theme-brutalist [class*="text-foreground"] {
+  color: #000000 !important;
+}
+
+.design-theme-brutalist .bg-muted,
+.design-theme-brutalist [class*="bg-muted"] {
+  background-color: #f0f0f0 !important;
+}
+
+.design-theme-brutalist .text-muted-foreground,
+.design-theme-brutalist [class*="text-muted-foreground"] {
+  color: #666666 !important;
+}
+
+.design-theme-brutalist .bg-gradient-to-br,
+.design-theme-brutalist [class*="bg-gradient"] {
+  background: #ffffff !important;
+}
+
+.design-theme-brutalist .design-theme-root {
+  background: #ffffff !important;
+}
+
+/* Override dark mode colors in brutalist theme */
+.design-theme-brutalist.dark {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 0%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 0%;
+}
+
+.design-theme-brutalist h1,
+.design-theme-brutalist h2,
+.design-theme-brutalist h3,
+.design-theme-brutalist h4,
+.design-theme-brutalist h5,
+.design-theme-brutalist h6 {
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+
+.design-theme-brutalist button,
+.design-theme-brutalist .btn {
+  border-width: var(--brutalist-border);
+  border-color: #000000;
+  box-shadow: var(--brutalist-shadow);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.1s ease;
+}
+
+.design-theme-brutalist button:hover,
+.design-theme-brutalist .btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 10px 10px 0px 0px rgba(0, 0, 0, 1);
+}
+
+.design-theme-brutalist button:active,
+.design-theme-brutalist .btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 1);
+}
+
+.design-theme-brutalist input,
+.design-theme-brutalist textarea,
+.design-theme-brutalist select {
+  border-width: 3px;
+  border-color: #000000;
+  font-weight: 700;
+}
+
+.design-theme-brutalist .card,
+.design-theme-brutalist [class*="card"] {
+  border: 5px solid #000000 !important;
+  box-shadow: 10px 10px 0px 0px rgba(0, 0, 0, 1) !important;
+  background-color: #ffffff !important;
+  border-radius: 0 !important;
+}
+
+.design-theme-brutalist .card-header,
+.design-theme-brutalist [class*="card-header"] {
+  border-bottom: 4px solid #000000 !important;
+}
+
+.design-theme-brutalist .card-title,
+.design-theme-brutalist [class*="card-title"] {
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+.design-theme-brutalist .card-content,
+.design-theme-brutalist [class*="card-content"] {
+  /* Content styling */
+}
+
+.design-theme-brutalist .card-footer,
+.design-theme-brutalist [class*="card-footer"] {
+  border-top: 4px solid #000000 !important;
+}
+
+/* Utility classes for brutalist theme */
+.brutalist-border {
+  border: var(--brutalist-border) solid #000000;
+}
+
+.brutalist-shadow {
+  box-shadow: var(--brutalist-shadow);
+}
+
+.brutalist-font {
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Button Variant Styling for Brutalist Theme */
+.design-theme-brutalist button,
+.design-theme-brutalist .btn,
+.design-theme-brutalist [role="button"] {
+  border: 3px solid #000000 !important;
+  box-shadow: 5px 5px 0px 0px rgba(0, 0, 0, 1) !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  transition: all 0.1s ease !important;
+}
+
+.design-theme-brutalist button:hover,
+.design-theme-brutalist .btn:hover,
+.design-theme-brutalist [role="button"]:hover {
+  transform: translate(-2px, -2px) !important;
+  box-shadow: 7px 7px 0px 0px rgba(0, 0, 0, 1) !important;
+}
+
+.design-theme-brutalist button:active,
+.design-theme-brutalist .btn:active,
+.design-theme-brutalist [role="button"]:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 3px 3px 0px 0px rgba(0, 0, 0, 1) !important;
+}
+
+/* Brutalist Button Variants */
+.design-theme-brutalist .design-theme-button-default {
+  background-color: #0066ff !important;
+  color: #ffffff !important;
+}
+
+.design-theme-brutalist .design-theme-button-default:hover {
+  background-color: #0055cc !important;
+}
+
+.design-theme-brutalist .design-theme-button-destructive {
+  background-color: #ff0000 !important;
+  color: #ffffff !important;
+}
+
+.design-theme-brutalist .design-theme-button-outline {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+.design-theme-brutalist .design-theme-button-secondary {
+  background-color: #f0f0f0 !important;
+  color: #000000 !important;
+}
+
+.design-theme-brutalist .design-theme-button-ghost {
+  background-color: transparent !important;
+  color: #000000 !important;
+}
+
+.design-theme-brutalist .design-theme-button-link {
+  border: none !important;
+  box-shadow: none !important;
+  text-transform: none !important;
+  text-decoration: underline !important;
+}
+
+/* Design Theme Component Styling */
+
+.design-theme-brutalist .design-theme-title {
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  color: #000000 !important;
+}
+
+.design-theme-brutalist .design-theme-tabs {
+  border: 3px solid #000000;
+  background: #f0f0f0;
+}
+
+.design-theme-brutalist .design-theme-tabs [data-state="active"] {
+  background: var(--brutalist-accent-green);
+  color: #000000;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.design-theme-brutalist .design-theme-text {
+  font-weight: 700;
+  color: #000000;
+}
+
+.design-theme-brutalist .design-theme-separator {
+  color: #000000 !important;
+  font-weight: 900;
+}
+
+.design-theme-brutalist .design-theme-link {
+  font-weight: 900;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  color: #0066ff;
+}
+
+.design-theme-brutalist .design-theme-link:hover {
+  background: var(--brutalist-accent-yellow);
+  color: #000000;
+}
+
+.design-theme-brutalist .design-theme-button {
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  border: 3px solid #000000 !important;
+  box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 1) !important;
+}
+
+.design-theme-brutalist .design-theme-button:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px 0px rgba(0, 0, 0, 1) !important;
+}
+
+/* Original theme - reset to default */
+.design-theme-original .design-theme-component,
+.design-theme-original .design-theme-title,
+.design-theme-original .design-theme-tabs,
+.design-theme-original .design-theme-text,
+.design-theme-original .design-theme-separator,
+.design-theme-original .design-theme-link,
+.design-theme-original .design-theme-button {
+  /* No special styling - use default Tailwind/shadcn styles */
+}
