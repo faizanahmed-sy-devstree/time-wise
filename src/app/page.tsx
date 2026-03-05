@@ -38,6 +38,7 @@ interface SessionState {
 export default function Home() {
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
+  const [isAboutSheetOpen, setIsAboutSheetOpen] = useState(false);
 
   const [settings, setSettings] = useLocalStorage(APP_SETTINGS_KEY, {
     fullDayHours: "8",
@@ -421,7 +422,7 @@ export default function Home() {
         <h1 className="text-3xl sm:text-4xl font-bold font-headline text-primary">TimeWise</h1>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <AboutSheet />
+          <AboutSheet isOpen={isAboutSheetOpen} onOpenChange={setIsAboutSheetOpen} />
         </div>
       </header>
 
@@ -517,9 +518,17 @@ export default function Home() {
           >
             open source
           </a>
-          )
+          ){" "}
+          <span className="text-muted-foreground">•</span>{" "}
+          <button
+            onClick={() => setIsAboutSheetOpen(true)}
+            className="font-semibold text-primary hover:underline transition-colors"
+          >
+            More
+          </button>
         </p>
       </footer>
+
     </div>
   );
 }

@@ -7,7 +7,6 @@ import { Icons } from "@/components/ui/icons";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { MewurkThemeProps } from "../mewurk-logs";
 
-
 export function OriginalLayout({
   data,
   stats,
@@ -16,7 +15,6 @@ export function OriginalLayout({
   formatHms,
   parseUtc,
 }: MewurkThemeProps) {
-  // Sort logs by time (Oldest -> Newest)
   const logs = [...data.clockInDetails].sort(
     (a, b) => new Date(a.clockTime).getTime() - new Date(b.clockTime).getTime()
   );
@@ -25,65 +23,69 @@ export function OriginalLayout({
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {/* 0. Error Warning */}
       {isSequenceBroken && (
-        <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl font-bold flex items-center gap-3 shadow-sm">
-          <div className="bg-red-500 text-white p-1 rounded-full">
-            <Icons.AlertTriangle className="h-4 w-4" />
+        <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl font-bold flex items-center gap-3 shadow-lg">
+          <div className="bg-rose-500 text-white p-1.5 rounded-full">
+            <Icons.AlertTriangle className="h-5 w-5" />
           </div>
-          <span className="text-sm tracking-tight">Sequence Broken: Duplicate clock-in/out detected.</span>
+          <span className="text-sm tracking-tight font-semibold">Sequence broken: Duplicate records detected.</span>
         </div>
       )}
 
-      {/* 1. Main Hero Card (Consolidated Stats) */}
-      <Card className="relative p-8 rounded-[2.5rem] bg-gradient-to-br from-card via-card to-primary/5 border-border/40 shadow-2xl overflow-hidden">
-        {/* Abstract Background Decoration */}
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+      {/* 1. Main Hero Card */}
+      <Card className="relative p-10 rounded-[3rem] bg-[#09090b] border-white/5 shadow-2xl overflow-hidden">
+        {/* Deep ambient glow */}
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none opacity-40" />
         
         <div className="relative z-10 flex flex-col items-center">
-          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/60 mb-2">
-            {stats.remainingMs > 0 ? "Time Remaining" : "Overtime Accrued"}
+          <span className="text-lg font-medium text-white/40 mb-3 tracking-wide">
+            {stats.remainingMs > 0 ? "Time remaining today" : "Overtime accrued"}
           </span>
           <div
             className={cn(
-              "text-7xl sm:text-8xl font-black font-mono tracking-tighter tabular-nums leading-none mb-10 drop-shadow-sm",
-              stats.remainingMs <= 0 ? "text-orange-500" : "text-foreground dark:text-white"
+              "text-7xl sm:text-8xl font-black font-mono tracking-tighter tabular-nums leading-none mb-12 drop-shadow-[0_0_30px_rgba(255,255,255,0.05)]",
+              stats.remainingMs <= 0 ? "text-rose-500" : "text-white"
             )}
           >
             {formatHms(stats.remainingMs)}
           </div>
 
-          {/* 4-Column Grid Stats */}
+          {/* 4-Column Grid Stats (Ultra Dark Theme) */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
             <StatBlock 
-              label="Started At" 
+              label="Started at" 
               value={stats.firstPunchTime ? format(stats.firstPunchTime, "hh:mm a") : "--:--"} 
-              icon={<Icons.Timer className="h-3 w-3 text-emerald-500" />}
+              className="bg-teal-950/40 border-teal-500/20 text-teal-100"
+              icon={<Icons.Timer className="h-4 w-4 text-teal-400" />}
             />
             <StatBlock 
-              label="Completes At" 
+              label="Completes at" 
               value={format(stats.estimatedEndTime, "hh:mm a")} 
-              icon={<Icons.CheckCircle className="h-3 w-3 text-blue-500" />}
+              className="bg-cyan-950/40 border-cyan-500/20 text-cyan-100"
+              icon={<Icons.CheckCircle className="h-4 w-4 text-cyan-400" />}
             />
             <StatBlock 
-              label="Total Break" 
+              label="Total break" 
               value={formatHms(stats.totalBreakMs)} 
-              icon={<Icons.Coffee className="h-3 w-3 text-orange-500" />}
+              className="bg-purple-950/40 border-purple-500/20 text-purple-100"
+              icon={<Icons.Coffee className="h-4 w-4 text-purple-400" />}
             />
             <StatBlock 
-              label="Daily Goal" 
+              label="Daily goal" 
               value={`${stats.targetHours}h ${stats.targetMinutes}m`} 
-              icon={<Icons.Target className="h-3 w-3 text-pink-500" />}
+              className="bg-rose-950/40 border-rose-500/20 text-rose-100"
+              icon={<Icons.Target className="h-4 w-4 text-rose-400" />}
             />
           </div>
           
           {/* Progress Bar */}
-          <div className="w-full mt-8 space-y-2">
-             <div className="flex justify-between items-center px-1">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Shift Progress</span>
-                <span className="text-xs font-black text-primary">{Math.round(stats.progress)}%</span>
+          <div className="w-full mt-12 space-y-3">
+             <div className="flex justify-between items-center px-2">
+                <span className="text-sm font-semibold text-white/30 tracking-tight">Shift progress</span>
+                <span className="text-sm font-black text-primary">{Math.round(stats.progress)}%</span>
              </div>
-             <div className="h-2.5 w-full bg-muted/50 rounded-full overflow-hidden p-0.5 border border-border/20">
+             <div className="h-3 w-full bg-white/5 rounded-full overflow-hidden p-1 border border-white/5">
                 <div 
-                  className={cn("h-full rounded-full transition-all duration-1000", stats.remainingMs <= 0 ? "bg-orange-500" : "bg-primary")} 
+                  className={cn("h-full rounded-full transition-all duration-1000", stats.remainingMs <= 0 ? "bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.5)]" : "bg-primary shadow-[0_0_15px_rgba(var(--primary),0.5)]")} 
                   style={{ width: `${stats.progress}%` }} 
                 />
              </div>
@@ -91,41 +93,38 @@ export function OriginalLayout({
         </div>
       </Card>
 
-      {/* 2. Activity History (Horizontal Timeline) */}
-      <Card className="p-6 rounded-[2.5rem] border-border/40 shadow-xl overflow-hidden relative group">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-pink-500/10 rounded-xl">
-               <Icons.Activity className="h-5 w-5 text-pink-500" />
+      {/* 2. Activity History */}
+      <Card className="p-8 rounded-[3rem] bg-card border-white/5 shadow-xl overflow-hidden relative group">
+        <div className="flex items-center justify-between mb-10">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-primary/10 rounded-2xl">
+               <Icons.Activity className="h-6 w-6 text-primary" />
             </div>
-            <h3 className="text-sm font-bold tracking-tight">Activity History</h3>
+            <h3 className="text-lg font-bold tracking-tight">Activity history</h3>
           </div>
-          <span className="text-[10px] font-bold px-3 py-1 bg-muted rounded-full text-muted-foreground uppercase tracking-widest">
+          <span className="text-sm font-bold px-4 py-1.5 bg-white/5 rounded-full text-white/40 tracking-wide">
             {logs.length} Entries
           </span>
         </div>
 
         <ScrollArea className="w-full whitespace-nowrap">
-          <div className="flex items-start gap-10 pb-6 px-4">
+          <div className="flex items-start gap-12 pb-8 px-6">
             {logs.map((l, i) => {
               const isPunchIn = l.inOutType === "IN";
               const isLast = i === logs.length - 1;
               return (
                 <div key={i} className="relative flex flex-col items-center group/node">
-                  {/* Connector Line */}
                   {!isLast && (
-                    <div className="absolute left-[50%] top-12 w-[calc(100%+2.5rem)] h-[2px] bg-muted group-hover/node:bg-primary/20 transition-colors z-0" />
+                    <div className="absolute left-[50%] top-[3.25rem] w-[calc(100%+3rem)] h-[2px] bg-white/5 group-hover/node:bg-primary/20 transition-colors z-0" />
                   )}
                   
-                  {/* Time Label (12h format, Bigger) */}
-                  <span className="text-sm font-bold text-foreground mb-4 tabular-nums">
+                  <span className="text-lg font-bold text-foreground mb-5 tabular-nums">
                     {format(parseUtc(l.clockTime), "hh:mm a")}
                   </span>
 
-                  {/* Icon Node */}
                   <div
                     className={cn(
-                      "w-12 h-12 rounded-full flex items-center justify-center border-2 z-10 transition-all duration-300 shadow-md bg-background",
+                      "w-14 h-14 rounded-full flex items-center justify-center border-2 z-10 transition-all duration-300 shadow-xl bg-[#09090b]",
                       isPunchIn
                         ? "border-emerald-500/40 ring-4 ring-emerald-500/5 group-hover/node:scale-110"
                         : "border-orange-500/40 ring-4 ring-orange-500/5 group-hover/node:scale-110"
@@ -133,16 +132,15 @@ export function OriginalLayout({
                   >
                     <Icons.RefreshCcw
                       className={cn(
-                        "w-5 h-5",
+                        "w-6 h-6",
                         isPunchIn ? "text-emerald-500" : "text-orange-500 rotate-180"
                       )}
                     />
                   </div>
 
-                  {/* Status Label */}
-                  <div className="mt-4 px-3 py-1 bg-muted/50 rounded-lg border border-border/40">
-                    <span className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter">
-                      {isPunchIn ? "Clock In" : "Clock Out"}
+                  <div className="mt-5 px-4 py-1.5 bg-white/5 rounded-xl border border-white/5">
+                    <span className="text-xs font-bold text-white/40 tracking-tight">
+                      {isPunchIn ? "Clock in" : "Clock out"}
                     </span>
                   </div>
                 </div>
@@ -153,42 +151,42 @@ export function OriginalLayout({
         </ScrollArea>
       </Card>
 
-      {/* 3. Footer Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2">
-        <FooterMetric label="Policy" value={data.policyName} />
-        <FooterMetric label="Shift" value={data.shiftName} />
-        <FooterMetric label="Monthly Avg" value={`${monthStats?.workingHours.dayAvg.toFixed(1)}h`} />
+      {/* 3. Footer Metrics */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 px-4">
+        <FooterMetric label="Attendance policy" value={data.policyName} />
+        <FooterMetric label="Shift schedule" value={data.shiftName} />
+        <FooterMetric label="Monthly average" value={`${monthStats?.workingHours.dayAvg.toFixed(1)}h / day`} />
         <FooterMetric 
-          label="Late / Early" 
-          value={`${monthStats?.gracePeriod.lateIn} / ${monthStats?.gracePeriod.earlyOut}`} 
+          label="Late / Early logs" 
+          value={`${monthStats?.gracePeriod.lateIn} In • ${monthStats?.gracePeriod.earlyOut} Out`} 
         />
       </div>
     </div>
   );
 }
 
-/* Internal Sub-components for cleaner UI */
+/* Sub-components */
 
-function StatBlock({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
+function StatBlock({ label, value, icon, className }: { label: string; value: string; icon: React.ReactNode; className: string }) {
   return (
-    <div className="p-4 bg-muted/40 dark:bg-white/5 border border-border/20 rounded-2xl flex flex-col items-center justify-center gap-1 transition-colors hover:bg-muted/60">
-      <div className="flex items-center gap-1.5 opacity-40">
+    <div className={cn("p-6 border rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-all hover:scale-[1.03] hover:bg-opacity-60 shadow-lg group", className)}>
+      <div className="flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
         {icon}
-        <span className="text-[9px] font-black uppercase tracking-widest">{label}</span>
+        <span className="text-md font-medium tracking-wide">{label}</span>
       </div>
-      <div className="text-xl font-black tracking-tight text-foreground">{value}</div>
+      <div className="text-4xl font-black tracking-tight tabular-nums">{value}</div>
     </div>
   );
 }
 
 function FooterMetric({ label, value }: { label: string; value?: string | number }) {
   return (
-    <div className="space-y-1">
-      <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">
+    <div className="space-y-1.5">
+      <span className="text-xs font-bold text-muted-foreground/40 tracking-wide">
         {label}
       </span>
-      <div className="text-xs font-bold text-muted-foreground truncate max-w-full">
-        {value || "N/A"}
+      <div className="text-sm font-bold text-muted-foreground/80 truncate max-w-full">
+        {value || "Not available"}
       </div>
     </div>
   );
