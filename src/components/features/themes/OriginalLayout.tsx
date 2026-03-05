@@ -21,7 +21,7 @@ export function OriginalLayout({
 
   return (
     /* Main Responsive Grid Container */
-    <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700 lg:h-[calc(100vh-220px)]">
+    <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700 lg:h-[calc(100vh-250px)]">
       
       {/* LEFT COLUMN: Main Stats & Timer (8/12) */}
       <div className="lg:col-span-8 flex flex-col gap-4 lg:h-full order-1">
