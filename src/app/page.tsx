@@ -419,15 +419,15 @@ export default function Home() {
       <WelcomeDialog open={isWelcomeDialogOpen} onOpenChange={setIsWelcomeDialogOpen} />
 
       <Tabs defaultValue="mewurk" className="h-full flex flex-col">
-        <header className="w-full max-w-7xl flex justify-between items-center mb-4 mx-auto flex-none">
-          <div className="flex items-center gap-4">
-            <h1 className="text-3xl sm:text-4xl font-bold font-headline text-primary">TimeWise</h1>
-            <TabsList className="grid grid-cols-2">
-              <TabsTrigger value="tracker">Manual Time Tracker</TabsTrigger>
-              <TabsTrigger value="mewurk">Mewurk Logs</TabsTrigger>
+        <header className="w-full max-w-7xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 mx-auto flex-none">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold font-headline text-primary whitespace-nowrap">TimeWise</h1>
+            <TabsList className="grid grid-cols-2 w-full sm:w-auto">
+              <TabsTrigger value="tracker" className="text-xs sm:text-sm">Manual Time Tracker</TabsTrigger>
+              <TabsTrigger value="mewurk" className="text-xs sm:text-sm">Mewurk Logs</TabsTrigger>
             </TabsList>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-stretch sm:self-auto">
             <ThemeToggle />
             <AboutSheet isOpen={isAboutSheetOpen} onOpenChange={setIsAboutSheetOpen} />
           </div>
