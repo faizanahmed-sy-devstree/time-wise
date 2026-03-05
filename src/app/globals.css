@@ -371,3 +371,9 @@
 .design-theme-original .design-theme-button {
   /* No special styling - use default Tailwind/shadcn styles */
 }
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(200%);
+  }
+}

@@ -41,6 +41,9 @@ import {
   ArrowDown,
   ArrowRight,
   Palette,
+  History,
+  AlertCircle,
+  Shield,
 } from "lucide-react";
 
 export const Icons = {
@@ -86,4 +89,7 @@ export const Icons = {
   ArrowDown,
   ArrowRight,
   Palette,
+  History,
+  AlertCircle,
+  Shield
 };
